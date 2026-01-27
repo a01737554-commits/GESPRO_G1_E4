@@ -2,10 +2,23 @@ from flask import Flask, jsonify
 
 app = Flask(__name__)
 
-# Endpoint raíz
-@app.route("/")  # o "/health"
+@app.route("/")
 def home():
-    return jsonify({"message": "Backend funcionando correctamente!"})
+    return jsonify({
+        "status": "OK",
+        "message": "Backend funcionando correctamente!"
+    })
+
+@app.route("/health")
+def health():
+    return jsonify({
+        "service": "flask-backend",
+        "state": "running"
+    })
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=True
+    )
