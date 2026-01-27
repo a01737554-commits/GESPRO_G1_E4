@@ -1,0 +1,1 @@
+Para correl el codigo en Anaconda prompt. ponen activate GESPRO y enter y luego compian esto: pip install flask
