@@ -1,0 +1,1 @@
+Para correr el codigo, en Anaconda prompt ponen activate GESPRO( o como se llame su entorno), enter y luego compian esto: pip install flask
