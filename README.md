@@ -21,3 +21,15 @@ Visual
 4. Instalar dependencia.
 5. Arrancar el backend.
 6. Abrir el frontend.
+
+Estructura de proyecto:
+1. backend/
+  - Contiene el código del servidor y la lógica de la aplicación.
+2. frontend/
+  - Incluye la parte visual de la aplicación.
+3. docs/
+  - Carpeta destinada a documentación adicional del proyecto (decisiones, notas, capturas, etc.).
+4. .gitignore
+  - Define los archivos y carpetas que no deben subirse al repositorio (entornos virtuales, cachés, etc.).
+5. README.md
+  - Documento principal del proyecto con la descripción, instrucciones y documentación básica.
