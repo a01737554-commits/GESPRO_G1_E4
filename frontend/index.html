@@ -1,15 +1,24 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Frontend Mínimo</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <title>Gestor de Tareas</title>
 </head>
 <body>
-    <h1>Frontend mínimo funcionando</h1>
-    <p>Este es un HTML simple con contenido estático.</p>
-        <!-- Enlace al archivo JavaScript -->
-    <script src="js/main.js"></script>
+
+  <h1>Gestor de Tareas</h1>
+
+  <h2>Nueva tarea</h2>
+  <form id="task-form">
+    <input id="task-title" type="text" placeholder="Escribe el título..." required />
+    <button type="submit">Agregar</button>
+  </form>
+
+  <p id="error" style="color:red;"></p>
+
+  <h2>Lista de tareas</h2>
+  <ul id="task-list"></ul>
+
+  <script src="js/main.js"></script>
 </body>
 </html>
-
