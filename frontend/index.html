@@ -6,7 +6,17 @@
 </head>
 <body>
 
-  <h1>Lista de tareas</h1>
+  <h1>Gestor de Tareas</h1>
+
+  <h2>Nueva tarea</h2>
+  <form id="task-form">
+    <input id="task-title" type="text" placeholder="Escribe el título..." required />
+    <button type="submit">Agregar</button>
+  </form>
+
+  <p id="error" style="color:red;"></p>
+
+  <h2>Lista de tareas</h2>
   <ul id="task-list"></ul>
 
   <script src="js/main.js"></script>
