@@ -1,9 +1,15 @@
-fetch("http://127.0.0.1:5000/test")
-    .then(response => response.json())
-    .then(data => {
-        document.getElementById("respuesta").textContent = data.message;
-    })
-    .catch(error => {
-        document.getElementById("respuesta").textContent = "Error de conexión";
-        console.error(error);
+fetch("http://127.0.0.1:5000/tasks")
+  .then(response => response.json())
+  .then(tasks => {
+    const list = document.getElementById("task-list");
+    list.innerHTML = "";
+
+    tasks.forEach(task => {
+      const li = document.createElement("li");
+      li.textContent = `${task.titulo} - ${task.estado}`;
+      list.appendChild(li);
     });
+  })
+  .catch(error => {
+    console.error("Error al cargar tareas:", error);
+  });
