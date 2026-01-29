@@ -7,13 +7,14 @@ app = Flask(__name__)
 CORS(app)
 
 # =============================
-# CONFIG PERSISTENCIA
+# ARCHIVOS
 # =============================
-DATA_FILE = os.path.join(os.path.dirname(__file__), "tareas.json")
-
+BASE_DIR = os.path.dirname(__file__)
+DATA_FILE = os.path.join(BASE_DIR, "tareas.json")
+USERS_FILE = os.path.join(BASE_DIR, "bbdd", "usuarios.txt")
 
 # =============================
-# MODELO
+# MODELO TASK
 # =============================
 class Task:
     def __init__(self, id, titulo, estado="TODO", estimacion=1, asignado_a=None):
@@ -42,19 +43,16 @@ class Task:
             asignado_a=d.get("asignado_a", None)
         )
 
-
 # =============================
 # "DB" EN MEMORIA
 # =============================
 tasks = []
 next_id = 1
 
-
 # =============================
-# UTILIDADES JSON
+# PERSISTENCIA TASKS JSON
 # =============================
 def load_tasks_from_file():
-    """Carga tareas desde tareas.json si existe."""
     global tasks, next_id
 
     if not os.path.exists(DATA_FILE):
@@ -70,40 +68,63 @@ def load_tasks_from_file():
             data = []
 
         tasks = [Task.from_dict(d) for d in data]
-
-        # next_id = max(id)+1
         max_id = max([t.id for t in tasks], default=0)
         next_id = max_id + 1
-
     except Exception:
-        # Si el archivo se corrompe, arrancamos limpio para no romper la app
         tasks = []
         next_id = 1
 
-
 def save_tasks_to_file():
-    """Guarda tareas a tareas.json (escritura atómica)."""
     data = [t.to_dict() for t in tasks]
     tmp_file = DATA_FILE + ".tmp"
-
     with open(tmp_file, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-
     os.replace(tmp_file, DATA_FILE)
 
-
-# Cargar al iniciar
 load_tasks_from_file()
 
+# =============================
+# USUARIOS DESDE TXT
+# Formato: Usuario|Pass|Nombre completo
+# =============================
+def load_users_from_file():
+    users = []
+    if not os.path.exists(USERS_FILE):
+        return users
+
+    with open(USERS_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            if line.lower().startswith("usuario|"):
+                continue
+
+            parts = line.split("|")
+            if len(parts) < 3:
+                continue
+
+            username = parts[0].strip()
+            full_name = parts[2].strip()
+
+            if username:
+                users.append({"usuario": username, "nombre": full_name})
+
+    return users
 
 # =============================
-# ENDPOINTS
+# ENDPOINT: GET /users
 # =============================
+@app.route("/users", methods=["GET"])
+def get_users():
+    return jsonify(load_users_from_file())
 
+# =============================
+# TASKS ENDPOINTS
+# =============================
 @app.route("/tasks", methods=["GET"])
 def get_tasks():
     return jsonify([t.to_dict() for t in tasks])
-
 
 @app.route("/tasks", methods=["POST"])
 def create_task():
@@ -117,7 +138,6 @@ def create_task():
     if not titulo:
         return jsonify(error="El título es obligatorio"), 400
 
-    # estimación obligatoria: entero 1-10
     try:
         estimacion = int(estimacion_raw)
         if estimacion < 1 or estimacion > 10:
@@ -134,10 +154,9 @@ def create_task():
     )
     next_id += 1
     tasks.append(new_task)
-
     save_tasks_to_file()
-    return jsonify(new_task.to_dict()), 201
 
+    return jsonify(new_task.to_dict()), 201
 
 @app.route("/tasks/<int:task_id>", methods=["PUT"])
 def update_task_state(task_id):
@@ -155,7 +174,6 @@ def update_task_state(task_id):
 
     return jsonify(error="Tarea no encontrada"), 404
 
-
 @app.route("/tasks/<int:task_id>", methods=["PATCH"])
 def patch_task(task_id):
     data = request.get_json(silent=True) or {}
@@ -169,19 +187,16 @@ def patch_task(task_id):
     if task is None:
         return jsonify(error="Tarea no encontrada"), 404
 
-    # titulo
     if "titulo" in data:
         titulo = (data.get("titulo") or "").strip()
         if not titulo:
             return jsonify(error="El título no puede estar vacío"), 400
         task.titulo = titulo
 
-    # asignado_a (vacío => None)
     if "asignado_a" in data:
         asignado = (data.get("asignado_a") or "").strip()
         task.asignado_a = asignado if asignado else None
 
-    # estimación 1-10
     if "estimacion" in data:
         try:
             est = int(data.get("estimacion"))
@@ -194,7 +209,6 @@ def patch_task(task_id):
     save_tasks_to_file()
     return jsonify(task.to_dict()), 200
 
-
 @app.route("/tasks/<int:task_id>", methods=["DELETE"])
 def delete_task(task_id):
     for i, t in enumerate(tasks):
@@ -204,7 +218,6 @@ def delete_task(task_id):
             return jsonify(message="Tarea eliminada"), 200
 
     return jsonify(error="Tarea no encontrada"), 404
-
 
 if __name__ == "__main__":
     app.run(debug=True)
