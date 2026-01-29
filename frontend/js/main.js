@@ -1,61 +1,92 @@
-const API_URL = "http://127.0.0.1:5000";
+const API = "http://127.0.0.1:5000";
+let draggedTaskId = null;
 
-const form = document.getElementById("task-form");
-const inputTitle = document.getElementById("task-title");
-const selectEstimacion = document.getElementById("task-estimacion");
-const inputAsignado = document.getElementById("task-asignado");
-const selectEstado = document.getElementById("task-estado");
+// =============================
+// CARGAR TABLERO
+// =============================
+async function loadBoard() {
+  document.querySelectorAll(".column").forEach(col => {
+    col.querySelectorAll(".task").forEach(t => t.remove());
+  });
 
-const list = document.getElementById("task-list");
-const errorP = document.getElementById("error");
-
-async function cargarTareas() {
-  errorP.textContent = "";
-  list.innerHTML = "";
-
-  const res = await fetch(`${API_URL}/tasks`);
+  const res = await fetch(`${API}/tasks`);
   const tasks = await res.json();
 
-  tasks.forEach((t) => {
-    const li = document.createElement("li");
-    li.textContent = `${t.titulo} | ${t.estado} | Est: ${t.estimacion} | ${t.asignado_a || "sin asignar"}`;
-    list.appendChild(li);
+  tasks.forEach(t => {
+    const taskDiv = document.createElement("div");
+    taskDiv.className = "task";
+    taskDiv.draggable = true;
+    taskDiv.dataset.id = t.id;
+
+    const info = document.createElement("div");
+    info.className = "task-info";
+    info.textContent = `${t.titulo} (${t.asignado_a || "sin asignar"})`;
+
+    const est = document.createElement("div");
+    est.className = "estimacion-circle";
+    est.textContent = t.estimacion;
+
+    taskDiv.addEventListener("dragstart", () => {
+      draggedTaskId = t.id;
+    });
+
+    taskDiv.appendChild(info);
+    taskDiv.appendChild(est);
+
+    const column = document.querySelector(
+      `.column[data-status="${t.estado}"]`
+    );
+    if (column) column.appendChild(taskDiv);
   });
 }
 
-form.addEventListener("submit", async (e) => {
+// =============================
+// DRAG & DROP
+// =============================
+document.querySelectorAll(".column").forEach(column => {
+  column.addEventListener("dragover", e => e.preventDefault());
+
+  column.addEventListener("drop", async () => {
+    if (!draggedTaskId) return;
+
+    await fetch(`${API}/tasks/${draggedTaskId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ estado: column.dataset.status })
+    });
+
+    draggedTaskId = null;
+    loadBoard();
+  });
+});
+
+// =============================
+// CREAR TAREA
+// =============================
+document.getElementById("task-form").addEventListener("submit", async e => {
   e.preventDefault();
-  errorP.textContent = "";
 
-  const titulo = inputTitle.value.trim();
-  const estimacion = selectEstimacion.value;
-  const asignado_a = inputAsignado.value.trim();
-  const estado = selectEstado.value;
+  const titulo = document.getElementById("title").value.trim();
+  const estimacion = document.getElementById("estimacion").value;
+  const asignado_a = document.getElementById("asignado").value.trim();
 
-  if (!estimacion) {
-    errorP.textContent = "Debes seleccionar una estimación entre 1 y 10";
-    return;
-  }
+  if (!titulo || !estimacion) return;
 
-  const res = await fetch(`${API_URL}/tasks`, {
+  await fetch(`${API}/tasks`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       titulo,
       estimacion: parseInt(estimacion, 10),
-      asignado_a,
-      estado
-    }),
+      asignado_a
+    })
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Error desconocido" }));
-    errorP.textContent = err.error || "Error al crear tarea";
-    return;
-  }
-
-  form.reset();
-  await cargarTareas();
+  e.target.reset();
+  loadBoard();
 });
 
-cargarTareas();
+// =============================
+// INICIO
+// =============================
+loadBoard();

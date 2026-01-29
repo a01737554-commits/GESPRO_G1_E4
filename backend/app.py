@@ -31,33 +31,26 @@ def get_tasks():
 @app.route("/tasks", methods=["POST"])
 def create_task():
     global next_id
-
-    data = request.get_json(silent=True) or {}
+    data = request.get_json() or {}
 
     titulo = (data.get("titulo") or "").strip()
-    estado = (data.get("estado") or "TODO").strip()
     asignado_a = (data.get("asignado_a") or "").strip() or None
     estimacion_raw = data.get("estimacion")
 
     if not titulo:
-        return jsonify(error="El título no puede estar vacío"), 400
+        return jsonify(error="Título obligatorio"), 400
 
-    # 🔒 Estimación obligatoria (1 a 10, enteros)
     try:
         estimacion = int(estimacion_raw)
         if estimacion < 1 or estimacion > 10:
-            return jsonify(error="La estimación debe estar entre 1 y 10"), 400
-    except (ValueError, TypeError):
-        return jsonify(error="La estimación debe ser un número entero"), 400
-
-    estados_validos = {"TODO", "IN_PROGRESS", "DONE"}
-    if estado not in estados_validos:
-        return jsonify(error="Estado inválido"), 400
+            raise ValueError
+    except:
+        return jsonify(error="Estimación debe ser entero 1–10"), 400
 
     new_task = Task(
         id=next_id,
         titulo=titulo,
-        estado=estado,
+        estado="TODO",
         estimacion=estimacion,
         asignado_a=asignado_a
     )
@@ -65,6 +58,22 @@ def create_task():
     tasks.append(new_task)
 
     return jsonify(new_task.to_dict()), 201
+
+# 🔄 actualizar estado (drag & drop)
+@app.route("/tasks/<int:task_id>", methods=["PUT"])
+def update_task(task_id):
+    data = request.get_json() or {}
+    nuevo_estado = data.get("estado")
+
+    if nuevo_estado not in {"TODO", "IN_PROGRESS", "DONE"}:
+        return jsonify(error="Estado inválido"), 400
+
+    for t in tasks:
+        if t.id == task_id:
+            t.estado = nuevo_estado
+            return jsonify(t.to_dict())
+
+    return jsonify(error="Tarea no encontrada"), 404
 
 if __name__ == "__main__":
     app.run(debug=True)
