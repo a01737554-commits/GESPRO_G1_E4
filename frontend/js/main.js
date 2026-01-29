@@ -31,7 +31,7 @@ function resetColumns() {
 }
 
 // =============================
-// Crear tarjeta (con botón eliminar)
+// Crear tarjeta (editar + eliminar)
 // =============================
 function createTaskCard(t) {
   const taskDiv = document.createElement("div");
@@ -39,15 +39,13 @@ function createTaskCard(t) {
   taskDiv.draggable = true;
   taskDiv.dataset.id = t.id;
 
-  // Orden visual: mayor estimación arriba
+  // Orden visual por estimación (10 arriba)
   taskDiv.style.order = String(1000 - t.estimacion);
 
-  // contenedor izquierdo (titulo y asignado)
   const info = document.createElement("div");
   info.className = "task-info";
   info.textContent = `${t.titulo} (${t.asignado_a || "sin asignar"})`;
 
-  // contenedor derecho (estimación + delete)
   const right = document.createElement("div");
   right.style.display = "flex";
   right.style.alignItems = "center";
@@ -57,23 +55,77 @@ function createTaskCard(t) {
   est.className = "estimacion-circle";
   est.textContent = t.estimacion;
 
-  // botón eliminar
-  const del = document.createElement("button");
-  del.type = "button";
-  del.textContent = "✖";
-  del.title = "Eliminar tarea";
-  del.style.border = "1px solid #333";
-  del.style.background = "white";
-  del.style.borderRadius = "6px";
-  del.style.cursor = "pointer";
-  del.style.padding = "2px 6px";
-  del.style.fontWeight = "bold";
+  // ✏️ Editar
+  const editBtn = document.createElement("button");
+  editBtn.type = "button";
+  editBtn.textContent = "✏️";
+  editBtn.title = "Editar tarea";
+  editBtn.style.border = "1px solid #333";
+  editBtn.style.background = "white";
+  editBtn.style.borderRadius = "6px";
+  editBtn.style.cursor = "pointer";
+  editBtn.style.padding = "2px 6px";
 
-  // Evita que el drag se dispare al dar click en borrar
-  del.addEventListener("mousedown", (e) => e.stopPropagation());
-  del.addEventListener("click", async (e) => {
+  editBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+  editBtn.addEventListener("click", async (e) => {
     e.stopPropagation();
 
+    // prompts con valores actuales
+    const newTitle = prompt("Nuevo título:", t.titulo);
+    if (newTitle === null) return; // cancel
+
+    const newAsignado = prompt("Nuevo asignado a (vacío = sin asignar):", t.asignado_a || "");
+    if (newAsignado === null) return;
+
+    const newEst = prompt("Nueva estimación (1-10):", String(t.estimacion));
+    if (newEst === null) return;
+
+    // Validación rápida frontend
+    const estInt = parseInt(newEst, 10);
+    if (!newTitle.trim()) {
+      alert("El título no puede estar vacío");
+      return;
+    }
+    if (!Number.isFinite(estInt) || estInt < 1 || estInt > 10) {
+      alert("La estimación debe ser un entero entre 1 y 10");
+      return;
+    }
+
+    // PATCH al backend
+    const res = await fetch(`${API}/tasks/${t.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        titulo: newTitle.trim(),
+        asignado_a: newAsignado.trim(),
+        estimacion: estInt
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Error desconocido" }));
+      alert(err.error || "Error al editar tarea");
+      return;
+    }
+
+    loadBoard();
+  });
+
+  // ✖ Eliminar
+  const delBtn = document.createElement("button");
+  delBtn.type = "button";
+  delBtn.textContent = "✖";
+  delBtn.title = "Eliminar tarea";
+  delBtn.style.border = "1px solid #333";
+  delBtn.style.background = "white";
+  delBtn.style.borderRadius = "6px";
+  delBtn.style.cursor = "pointer";
+  delBtn.style.padding = "2px 6px";
+  delBtn.style.fontWeight = "bold";
+
+  delBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+  delBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
     const ok = confirm("¿Eliminar esta tarea?");
     if (!ok) return;
 
@@ -81,12 +133,14 @@ function createTaskCard(t) {
     loadBoard();
   });
 
+  // Drag
   taskDiv.addEventListener("dragstart", () => {
     draggedTaskId = t.id;
   });
 
   right.appendChild(est);
-  right.appendChild(del);
+  right.appendChild(editBtn);
+  right.appendChild(delBtn);
 
   taskDiv.appendChild(info);
   taskDiv.appendChild(right);
@@ -116,19 +170,17 @@ async function loadBoard() {
     }
   });
 
-  // Orden lógico
+  // Orden lógico por estimación (desc)
   Object.keys(grouped).forEach(status => {
     grouped[status].sort((a, b) => b.estimacion - a.estimacion);
   });
 
-  // Render (order también asegura visual)
+  // Render
   Object.keys(grouped).forEach(status => {
     const col = document.querySelector(`.column[data-status="${status}"]`);
     if (!col) return;
 
-    grouped[status].forEach(t => {
-      col.appendChild(createTaskCard(t));
-    });
+    grouped[status].forEach(t => col.appendChild(createTaskCard(t)));
   });
 
   // Totales

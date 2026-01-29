@@ -32,7 +32,7 @@ next_id = 1
 
 
 # =============================
-# GET /tasks -> listar tareas
+# GET /tasks -> listar
 # =============================
 @app.route("/tasks", methods=["GET"])
 def get_tasks():
@@ -40,8 +40,8 @@ def get_tasks():
 
 
 # =============================
-# POST /tasks -> crear tarea
-# Body JSON:
+# POST /tasks -> crear (estimación 1-10 obligatoria)
+# Body:
 # { "titulo": "...", "estimacion": 1-10, "asignado_a": "..." }
 # =============================
 @app.route("/tasks", methods=["POST"])
@@ -79,11 +79,12 @@ def create_task():
 
 
 # =============================
-# PUT /tasks/<id> -> actualizar estado (Kanban drag&drop)
-# Body JSON: { "estado": "TODO" | "IN_PROGRESS" | "DONE" }
+# PUT /tasks/<id> -> actualizar estado (drag & drop)
+# Body:
+# { "estado": "TODO" | "IN_PROGRESS" | "DONE" }
 # =============================
 @app.route("/tasks/<int:task_id>", methods=["PUT"])
-def update_task(task_id):
+def update_task_state(task_id):
     data = request.get_json(silent=True) or {}
     nuevo_estado = data.get("estado")
 
@@ -99,7 +100,50 @@ def update_task(task_id):
 
 
 # =============================
-# DELETE /tasks/<id> -> eliminar tarea
+# PATCH /tasks/<id> -> editar campos
+# Body (puede incluir 1 o varios):
+# { "titulo": "...", "estimacion": 1-10, "asignado_a": "..." }
+# =============================
+@app.route("/tasks/<int:task_id>", methods=["PATCH"])
+def patch_task(task_id):
+    data = request.get_json(silent=True) or {}
+
+    task = None
+    for t in tasks:
+        if t.id == task_id:
+            task = t
+            break
+
+    if task is None:
+        return jsonify(error="Tarea no encontrada"), 404
+
+    # titulo
+    if "titulo" in data:
+        titulo = (data.get("titulo") or "").strip()
+        if not titulo:
+            return jsonify(error="El título no puede estar vacío"), 400
+        task.titulo = titulo
+
+    # asignado_a (vacío => None)
+    if "asignado_a" in data:
+        asignado = (data.get("asignado_a") or "").strip()
+        task.asignado_a = asignado if asignado else None
+
+    # estimación 1-10
+    if "estimacion" in data:
+        try:
+            est = int(data.get("estimacion"))
+            if est < 1 or est > 10:
+                return jsonify(error="La estimación debe ser un entero entre 1 y 10"), 400
+            task.estimacion = est
+        except (ValueError, TypeError):
+            return jsonify(error="La estimación debe ser un entero entre 1 y 10"), 400
+
+    return jsonify(task.to_dict()), 200
+
+
+# =============================
+# DELETE /tasks/<id> -> eliminar
 # =============================
 @app.route("/tasks/<int:task_id>", methods=["DELETE"])
 def delete_task(task_id):
