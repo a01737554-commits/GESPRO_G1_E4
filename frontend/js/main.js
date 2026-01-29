@@ -2,17 +2,29 @@ const API = "http://127.0.0.1:5000";
 let draggedTaskId = null;
 
 // =============================
-// CARGAR TABLERO
+// CARGAR TABLERO + SUMAS
 // =============================
 async function loadBoard() {
+  // limpiar columnas
   document.querySelectorAll(".column").forEach(col => {
     col.querySelectorAll(".task").forEach(t => t.remove());
   });
+
+  // reiniciar totales
+  const totals = {
+    TODO: 0,
+    IN_PROGRESS: 0,
+    DONE: 0
+  };
 
   const res = await fetch(`${API}/tasks`);
   const tasks = await res.json();
 
   tasks.forEach(t => {
+    // acumular estimaciones
+    totals[t.estado] += t.estimacion;
+
+    // crear tarjeta
     const taskDiv = document.createElement("div");
     taskDiv.className = "task";
     taskDiv.draggable = true;
@@ -33,11 +45,15 @@ async function loadBoard() {
     taskDiv.appendChild(info);
     taskDiv.appendChild(est);
 
-    const column = document.querySelector(
-      `.column[data-status="${t.estado}"]`
-    );
-    if (column) column.appendChild(taskDiv);
+    document
+      .querySelector(`.column[data-status="${t.estado}"]`)
+      .appendChild(taskDiv);
   });
+
+  // actualizar círculos de totales
+  document.getElementById("total-TODO").textContent = totals.TODO;
+  document.getElementById("total-IN_PROGRESS").textContent = totals.IN_PROGRESS;
+  document.getElementById("total-DONE").textContent = totals.DONE;
 }
 
 // =============================
