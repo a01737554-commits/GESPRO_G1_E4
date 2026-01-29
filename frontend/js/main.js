@@ -8,8 +8,7 @@ const STATUS_LABELS = {
 };
 
 // =============================
-// Reset REAL de columnas
-// (y las convierte a flex para poder usar "order")
+// Reset columnas (header + total) y flex para order
 // =============================
 function resetColumns() {
   document.querySelectorAll(".column").forEach(col => {
@@ -22,19 +21,17 @@ function resetColumns() {
       </h3>
     `;
 
-    // 🔒 Fuerza layout flex para que "order" funcione
     col.style.display = "flex";
     col.style.flexDirection = "column";
     col.style.gap = "8px";
 
-    // Header siempre arriba
     const header = col.querySelector("h3");
     if (header) header.style.order = "-9999";
   });
 }
 
 // =============================
-// Render de una tarjeta
+// Crear tarjeta (con botón eliminar)
 // =============================
 function createTaskCard(t) {
   const taskDiv = document.createElement("div");
@@ -42,30 +39,63 @@ function createTaskCard(t) {
   taskDiv.draggable = true;
   taskDiv.dataset.id = t.id;
 
-  // ✅ ORDEN VISUAL: mayor estimación arriba
-  // (en flexbox, menor "order" aparece primero)
-  taskDiv.style.order = String(1000 - t.estimacion); // 10 => 990, 1 => 999
+  // Orden visual: mayor estimación arriba
+  taskDiv.style.order = String(1000 - t.estimacion);
 
+  // contenedor izquierdo (titulo y asignado)
   const info = document.createElement("div");
   info.className = "task-info";
   info.textContent = `${t.titulo} (${t.asignado_a || "sin asignar"})`;
+
+  // contenedor derecho (estimación + delete)
+  const right = document.createElement("div");
+  right.style.display = "flex";
+  right.style.alignItems = "center";
+  right.style.gap = "8px";
 
   const est = document.createElement("div");
   est.className = "estimacion-circle";
   est.textContent = t.estimacion;
 
+  // botón eliminar
+  const del = document.createElement("button");
+  del.type = "button";
+  del.textContent = "✖";
+  del.title = "Eliminar tarea";
+  del.style.border = "1px solid #333";
+  del.style.background = "white";
+  del.style.borderRadius = "6px";
+  del.style.cursor = "pointer";
+  del.style.padding = "2px 6px";
+  del.style.fontWeight = "bold";
+
+  // Evita que el drag se dispare al dar click en borrar
+  del.addEventListener("mousedown", (e) => e.stopPropagation());
+  del.addEventListener("click", async (e) => {
+    e.stopPropagation();
+
+    const ok = confirm("¿Eliminar esta tarea?");
+    if (!ok) return;
+
+    await fetch(`${API}/tasks/${t.id}`, { method: "DELETE" });
+    loadBoard();
+  });
+
   taskDiv.addEventListener("dragstart", () => {
     draggedTaskId = t.id;
   });
 
+  right.appendChild(est);
+  right.appendChild(del);
+
   taskDiv.appendChild(info);
-  taskDiv.appendChild(est);
+  taskDiv.appendChild(right);
 
   return taskDiv;
 }
 
 // =============================
-// Cargar tablero (ordena + renderiza)
+// Cargar tablero
 // =============================
 async function loadBoard() {
   resetColumns();
@@ -81,18 +111,17 @@ async function loadBoard() {
     const est = parseInt(t.estimacion, 10);
 
     if (grouped[status] && Number.isFinite(est)) {
-      const task = { ...t, estimacion: est };
-      grouped[status].push(task);
+      grouped[status].push({ ...t, estimacion: est });
       totals[status] += est;
     }
   });
 
-  // ✅ Orden lógico (por si acaso)
+  // Orden lógico
   Object.keys(grouped).forEach(status => {
     grouped[status].sort((a, b) => b.estimacion - a.estimacion);
   });
 
-  // Renderizar
+  // Render (order también asegura visual)
   Object.keys(grouped).forEach(status => {
     const col = document.querySelector(`.column[data-status="${status}"]`);
     if (!col) return;
@@ -124,12 +153,12 @@ document.querySelectorAll(".column").forEach(column => {
     });
 
     draggedTaskId = null;
-    loadBoard(); // reordena al mover
+    loadBoard();
   });
 });
 
 // =============================
-// Crear tarea (y reordenar inmediato)
+// Crear tarea
 // =============================
 document.getElementById("task-form").addEventListener("submit", async e => {
   e.preventDefault();
@@ -143,15 +172,11 @@ document.getElementById("task-form").addEventListener("submit", async e => {
   await fetch(`${API}/tasks`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      titulo,
-      estimacion,
-      asignado_a
-    })
+    body: JSON.stringify({ titulo, estimacion, asignado_a })
   });
 
   e.target.reset();
-  loadBoard(); // ✅ reordena al crear
+  loadBoard();
 });
 
 // Inicio
