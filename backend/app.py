@@ -5,12 +5,12 @@ app = Flask(__name__)
 CORS(app)
 
 class Task:
-    def __init__(self, id, titulo, estado="TODO", estimacion=None, asignado_a=None):
+    def __init__(self, id, titulo, estado="TODO", estimacion=1, asignado_a=None):
         self.id = id
         self.titulo = titulo
         self.estado = estado
-        self.estimacion = estimacion  # puede ser int/float o None
-        self.asignado_a = asignado_a  # string o None
+        self.estimacion = estimacion
+        self.asignado_a = asignado_a
 
     def to_dict(self):
         return {
@@ -21,7 +21,6 @@ class Task:
             "asignado_a": self.asignado_a
         }
 
-# "Base de datos" en memoria
 tasks = []
 next_id = 1
 
@@ -37,28 +36,23 @@ def create_task():
 
     titulo = (data.get("titulo") or "").strip()
     estado = (data.get("estado") or "TODO").strip()
-
-    # nuevos campos
     asignado_a = (data.get("asignado_a") or "").strip() or None
     estimacion_raw = data.get("estimacion")
 
     if not titulo:
         return jsonify(error="El título no puede estar vacío"), 400
 
-    # Validar estado (opcional pero limpio)
+    # 🔒 Estimación obligatoria (1 a 10, enteros)
+    try:
+        estimacion = int(estimacion_raw)
+        if estimacion < 1 or estimacion > 10:
+            return jsonify(error="La estimación debe estar entre 1 y 10"), 400
+    except (ValueError, TypeError):
+        return jsonify(error="La estimación debe ser un número entero"), 400
+
     estados_validos = {"TODO", "IN_PROGRESS", "DONE"}
     if estado not in estados_validos:
-        return jsonify(error="Estado inválido. Usa TODO, IN_PROGRESS o DONE."), 400
-
-    # Validar/convertir estimación (opcional)
-    estimacion = None
-    if estimacion_raw not in (None, ""):
-        try:
-            estimacion = float(estimacion_raw)
-            if estimacion < 0:
-                return jsonify(error="La estimación no puede ser negativa."), 400
-        except (ValueError, TypeError):
-            return jsonify(error="La estimación debe ser un número."), 400
+        return jsonify(error="Estado inválido"), 400
 
     new_task = Task(
         id=next_id,
