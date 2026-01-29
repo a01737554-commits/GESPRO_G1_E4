@@ -10,7 +10,18 @@
 
   <h2>Nueva tarea</h2>
   <form id="task-form">
-    <input id="task-title" type="text" placeholder="Escribe el título..." required />
+    <input id="task-title" type="text" placeholder="Título de la tarea" required />
+
+    <input id="task-estimacion" type="number" step="0.5" min="0" placeholder="Estimación (ej. horas)" />
+
+    <input id="task-asignado" type="text" placeholder="Asignado a (nombre)" />
+
+    <select id="task-estado">
+      <option value="TODO">TODO</option>
+      <option value="IN_PROGRESS">IN_PROGRESS</option>
+      <option value="DONE">DONE</option>
+    </select>
+
     <button type="submit">Agregar</button>
   </form>
 
