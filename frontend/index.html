@@ -2,27 +2,26 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Gestor de Tareas – Kanban</title>
+  <title>Kanban – Gestor de Tareas</title>
 
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
 
     form input, form select, form button { margin-right: 6px; }
 
-    .wip-bar{
+    .wip-bar {
       margin-top: 10px;
       display: flex;
       align-items: center;
       gap: 10px;
     }
 
-    .wip-select{
+    .wip-select {
       border: 1px solid #333;
       border-radius: 8px;
       padding: 2px 6px;
-      background: white;
       font-weight: bold;
-      font-size: 12px;
+      background: white;
     }
 
     .wip-count {
@@ -38,11 +37,8 @@
 
     .column { width: 30%; padding: 10px; border-radius: 8px; }
 
-    /* 🔴 TODO */
     .column[data-status="TODO"] { background: #fdecea; border-top: 6px solid #e53935; }
-    /* 🟠 IN PROGRESS */
     .column[data-status="IN_PROGRESS"] { background: #fff4e5; border-top: 6px solid #fb8c00; }
-    /* 🟢 DONE */
     .column[data-status="DONE"] { background: #e8f5e9; border-top: 6px solid #43a047; }
 
     .column h3 {
@@ -50,41 +46,43 @@
       justify-content: space-between;
       align-items: center;
       margin-top: 0;
-      gap: 10px;
     }
 
-    .header-left {
+    .column-total {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: white;
+      border: 2px solid #333;
       display: flex;
       align-items: center;
-      gap: 10px;
-    }
-
-    /* círculo de suma de estimaciones */
-    .column-total {
-      width: 26px; height: 26px; border-radius: 50%;
-      background: white; border: 2px solid #333; color: #333;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: bold; font-size: 13px;
+      justify-content: center;
+      font-weight: bold;
     }
 
     .task {
       background: white;
-      padding: 8px 10px;
+      padding: 8px;
       border-radius: 6px;
-      cursor: grab;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      cursor: grab;
       border: 1px solid #ddd;
     }
 
     .task-info { font-size: 14px; }
 
     .estimacion-circle {
-      width: 26px; height: 26px; border-radius: 50%;
-      background: white; border: 2px solid #333; color: #333;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: bold; font-size: 13px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 2px solid #333;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      background: white;
     }
   </style>
 </head>
@@ -95,54 +93,46 @@
 
 <h2>Nueva tarea</h2>
 <form id="task-form">
-  <input id="title" placeholder="Título" required />
+  <input id="title" placeholder="Título" required>
 
   <select id="estimacion" required>
     <option value="">Estimación</option>
-    <option value="1">1</option><option value="2">2</option><option value="3">3</option>
-    <option value="4">4</option><option value="5">5</option><option value="6">6</option>
-    <option value="7">7</option><option value="8">8</option><option value="9">9</option>
-    <option value="10">10</option>
+    <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+    <option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
   </select>
 
-  <input id="asignado" placeholder="Asignado a" />
+  <input id="asignado" placeholder="Asignado a">
   <button>Agregar</button>
 </form>
 
-<!-- ✅ WIP LIMIT SOLO PARA IN PROGRESS (debajo de crear tarea) -->
+<!-- ✅ WIP SOLO IN PROGRESS -->
 <div class="wip-bar">
   <strong>WIP límite (IN PROGRESS):</strong>
-  <select class="wip-select" id="wip-IN_PROGRESS" title="WIP Limit (1-10)">
+  <select class="wip-select" id="wip-IN_PROGRESS">
     <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
-    <option>6</option><option>7</option><option>8</option><option>9</option><option selected>10</option>
+    <option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
+    <option>11</option><option>12</option><option>13</option><option>14</option><option>15</option>
+    <option>16</option><option>17</option><option>18</option><option>19</option>
+    <option selected>20</option>
   </select>
 </div>
 
 <div class="kanban">
 
   <div class="column" data-status="TODO">
-    <h3>
-      <span class="header-left">TODO</span>
-      <span class="column-total" id="total-TODO">0</span>
-    </h3>
+    <h3>TODO <span class="column-total" id="total-TODO">0</span></h3>
   </div>
 
   <div class="column" data-status="IN_PROGRESS">
     <h3>
-      <span class="header-left">
-        IN PROGRESS
-        <!-- ✅ Badge de conteo actual/limite solo aquí -->
-        <span class="wip-count" id="wipcount-IN_PROGRESS">0/10</span>
-      </span>
+      IN PROGRESS
+      <span class="wip-count" id="wipcount-IN_PROGRESS">0/22</span>
       <span class="column-total" id="total-IN_PROGRESS">0</span>
     </h3>
   </div>
 
   <div class="column" data-status="DONE">
-    <h3>
-      <span class="header-left">DONE</span>
-      <span class="column-total" id="total-DONE">0</span>
-    </h3>
+    <h3>DONE <span class="column-total" id="total-DONE">0</span></h3>
   </div>
 
 </div>
