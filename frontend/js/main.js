@@ -1,37 +1,36 @@
 const API = "http://127.0.0.1:5000";
 let draggedTaskId = null;
 
-const STATUS_LABELS = {
-  TODO: "TODO",
-  IN_PROGRESS: "IN PROGRESS",
-  DONE: "DONE"
-};
+const DEFAULT_WIP_INPROGRESS = 10;
 
 // =============================
-// Reset columnas (header + total) y flex para order
+// WIP IN_PROGRESS: leer/guardar
 // =============================
-function resetColumns() {
-  document.querySelectorAll(".column").forEach(col => {
-    const status = col.dataset.status;
+function getWipInProgress() {
+  const saved = localStorage.getItem("wip-IN_PROGRESS");
+  const val = saved ? parseInt(saved, 10) : DEFAULT_WIP_INPROGRESS;
+  return Number.isFinite(val) ? val : DEFAULT_WIP_INPROGRESS;
+}
 
-    col.innerHTML = `
-      <h3>
-        ${STATUS_LABELS[status] || status}
-        <span class="column-total" id="total-${status}">0</span>
-      </h3>
-    `;
+function setWipInProgress(val) {
+  localStorage.setItem("wip-IN_PROGRESS", String(val));
+}
 
-    col.style.display = "flex";
-    col.style.flexDirection = "column";
-    col.style.gap = "8px";
+function wireWipSelect() {
+  const sel = document.getElementById("wip-IN_PROGRESS");
+  if (!sel) return;
 
-    const header = col.querySelector("h3");
-    if (header) header.style.order = "-9999";
+  sel.value = String(getWipInProgress());
+
+  sel.addEventListener("change", () => {
+    const v = parseInt(sel.value, 10);
+    setWipInProgress(v);
+    loadBoard(); // actualiza badge
   });
 }
 
 // =============================
-// Crear tarjeta (editar + eliminar)
+// Crear tarjeta (con orden visual)
 // =============================
 function createTaskCard(t) {
   const taskDiv = document.createElement("div");
@@ -39,7 +38,7 @@ function createTaskCard(t) {
   taskDiv.draggable = true;
   taskDiv.dataset.id = t.id;
 
-  // Orden visual por estimación (10 arriba)
+  // orden visual por estimación (10 arriba)
   taskDiv.style.order = String(1000 - t.estimacion);
 
   const info = document.createElement("div");
@@ -66,13 +65,12 @@ function createTaskCard(t) {
   editBtn.style.cursor = "pointer";
   editBtn.style.padding = "2px 6px";
 
-  editBtn.addEventListener("mousedown", (e) => e.stopPropagation());
-  editBtn.addEventListener("click", async (e) => {
+  editBtn.addEventListener("mousedown", e => e.stopPropagation());
+  editBtn.addEventListener("click", async e => {
     e.stopPropagation();
 
-    // prompts con valores actuales
     const newTitle = prompt("Nuevo título:", t.titulo);
-    if (newTitle === null) return; // cancel
+    if (newTitle === null) return;
 
     const newAsignado = prompt("Nuevo asignado a (vacío = sin asignar):", t.asignado_a || "");
     if (newAsignado === null) return;
@@ -80,18 +78,12 @@ function createTaskCard(t) {
     const newEst = prompt("Nueva estimación (1-10):", String(t.estimacion));
     if (newEst === null) return;
 
-    // Validación rápida frontend
     const estInt = parseInt(newEst, 10);
-    if (!newTitle.trim()) {
-      alert("El título no puede estar vacío");
-      return;
-    }
+    if (!newTitle.trim()) return alert("El título no puede estar vacío");
     if (!Number.isFinite(estInt) || estInt < 1 || estInt > 10) {
-      alert("La estimación debe ser un entero entre 1 y 10");
-      return;
+      return alert("La estimación debe ser un entero entre 1 y 10");
     }
 
-    // PATCH al backend
     const res = await fetch(`${API}/tasks/${t.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -104,8 +96,7 @@ function createTaskCard(t) {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: "Error desconocido" }));
-      alert(err.error || "Error al editar tarea");
-      return;
+      return alert(err.error || "Error al editar tarea");
     }
 
     loadBoard();
@@ -123,8 +114,8 @@ function createTaskCard(t) {
   delBtn.style.padding = "2px 6px";
   delBtn.style.fontWeight = "bold";
 
-  delBtn.addEventListener("mousedown", (e) => e.stopPropagation());
-  delBtn.addEventListener("click", async (e) => {
+  delBtn.addEventListener("mousedown", e => e.stopPropagation());
+  delBtn.addEventListener("click", async e => {
     e.stopPropagation();
     const ok = confirm("¿Eliminar esta tarea?");
     if (!ok) return;
@@ -151,14 +142,26 @@ function createTaskCard(t) {
 // =============================
 // Cargar tablero
 // =============================
+let lastCounts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
+
 async function loadBoard() {
-  resetColumns();
+  // limpiar tareas (sin tocar headers)
+  document.querySelectorAll(".column").forEach(col => {
+    col.querySelectorAll(".task").forEach(t => t.remove());
+    // flex para que "order" funcione
+    col.style.display = "flex";
+    col.style.flexDirection = "column";
+    col.style.gap = "8px";
+    const header = col.querySelector("h3");
+    if (header) header.style.order = "-9999";
+  });
 
   const res = await fetch(`${API}/tasks`);
   const tasks = await res.json();
 
   const grouped = { TODO: [], IN_PROGRESS: [], DONE: [] };
   const totals = { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
+  const counts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
 
   tasks.forEach(t => {
     const status = t.estado;
@@ -167,30 +170,37 @@ async function loadBoard() {
     if (grouped[status] && Number.isFinite(est)) {
       grouped[status].push({ ...t, estimacion: est });
       totals[status] += est;
+      counts[status] += 1;
     }
   });
 
-  // Orden lógico por estimación (desc)
+  lastCounts = counts;
+
+  // ordenar por estimación desc
   Object.keys(grouped).forEach(status => {
     grouped[status].sort((a, b) => b.estimacion - a.estimacion);
   });
 
-  // Render
+  // render
   Object.keys(grouped).forEach(status => {
     const col = document.querySelector(`.column[data-status="${status}"]`);
     if (!col) return;
-
     grouped[status].forEach(t => col.appendChild(createTaskCard(t)));
   });
 
-  // Totales
+  // totales
   document.getElementById("total-TODO").textContent = totals.TODO;
   document.getElementById("total-IN_PROGRESS").textContent = totals.IN_PROGRESS;
   document.getElementById("total-DONE").textContent = totals.DONE;
+
+  // badge WIP solo IN_PROGRESS
+  const lim = getWipInProgress();
+  const badge = document.getElementById("wipcount-IN_PROGRESS");
+  if (badge) badge.textContent = `${counts.IN_PROGRESS}/${lim}`;
 }
 
 // =============================
-// Drag & drop
+// Drag & drop con bloqueo SOLO hacia IN_PROGRESS
 // =============================
 document.querySelectorAll(".column").forEach(column => {
   column.addEventListener("dragover", e => e.preventDefault());
@@ -198,10 +208,24 @@ document.querySelectorAll(".column").forEach(column => {
   column.addEventListener("drop", async () => {
     if (!draggedTaskId) return;
 
+    const targetStatus = column.dataset.status;
+
+    // 🚫 WIP solo si intentas soltar en IN_PROGRESS
+    if (targetStatus === "IN_PROGRESS") {
+      const limit = getWipInProgress();
+      const current = lastCounts.IN_PROGRESS ?? 0;
+
+      if (current >= limit) {
+        draggedTaskId = null;
+        alert(`WIP límite alcanzado en IN PROGRESS (${current}/${limit}).`);
+        return;
+      }
+    }
+
     await fetch(`${API}/tasks/${draggedTaskId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ estado: column.dataset.status })
+      body: JSON.stringify({ estado: targetStatus })
     });
 
     draggedTaskId = null;
@@ -210,7 +234,7 @@ document.querySelectorAll(".column").forEach(column => {
 });
 
 // =============================
-// Crear tarea
+// Crear tarea (SIN WIP en TODO)
 // =============================
 document.getElementById("task-form").addEventListener("submit", async e => {
   e.preventDefault();
@@ -231,5 +255,8 @@ document.getElementById("task-form").addEventListener("submit", async e => {
   loadBoard();
 });
 
-// Inicio
+// =============================
+// INICIO
+// =============================
+wireWipSelect();
 loadBoard();
