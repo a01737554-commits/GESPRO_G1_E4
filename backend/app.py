@@ -1,8 +1,16 @@
+import json
+import os
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
+
+# =============================
+# CONFIG PERSISTENCIA
+# =============================
+DATA_FILE = os.path.join(os.path.dirname(__file__), "tareas.json")
+
 
 # =============================
 # MODELO
@@ -24,32 +32,84 @@ class Task:
             "asignado_a": self.asignado_a
         }
 
+    @staticmethod
+    def from_dict(d):
+        return Task(
+            id=int(d["id"]),
+            titulo=d.get("titulo", ""),
+            estado=d.get("estado", "TODO"),
+            estimacion=int(d.get("estimacion", 1)),
+            asignado_a=d.get("asignado_a", None)
+        )
+
+
 # =============================
-# "BASE DE DATOS" EN MEMORIA
+# "DB" EN MEMORIA
 # =============================
 tasks = []
 next_id = 1
 
 
 # =============================
-# GET /tasks -> listar
+# UTILIDADES JSON
 # =============================
+def load_tasks_from_file():
+    """Carga tareas desde tareas.json si existe."""
+    global tasks, next_id
+
+    if not os.path.exists(DATA_FILE):
+        tasks = []
+        next_id = 1
+        return
+
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not isinstance(data, list):
+            data = []
+
+        tasks = [Task.from_dict(d) for d in data]
+
+        # next_id = max(id)+1
+        max_id = max([t.id for t in tasks], default=0)
+        next_id = max_id + 1
+
+    except Exception:
+        # Si el archivo se corrompe, arrancamos limpio para no romper la app
+        tasks = []
+        next_id = 1
+
+
+def save_tasks_to_file():
+    """Guarda tareas a tareas.json (escritura atómica)."""
+    data = [t.to_dict() for t in tasks]
+    tmp_file = DATA_FILE + ".tmp"
+
+    with open(tmp_file, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    os.replace(tmp_file, DATA_FILE)
+
+
+# Cargar al iniciar
+load_tasks_from_file()
+
+
+# =============================
+# ENDPOINTS
+# =============================
+
 @app.route("/tasks", methods=["GET"])
 def get_tasks():
     return jsonify([t.to_dict() for t in tasks])
 
 
-# =============================
-# POST /tasks -> crear (estimación 1-10 obligatoria)
-# Body:
-# { "titulo": "...", "estimacion": 1-10, "asignado_a": "..." }
-# =============================
 @app.route("/tasks", methods=["POST"])
 def create_task():
     global next_id
 
     data = request.get_json(silent=True) or {}
-
     titulo = (data.get("titulo") or "").strip()
     asignado_a = (data.get("asignado_a") or "").strip() or None
     estimacion_raw = data.get("estimacion")
@@ -75,14 +135,10 @@ def create_task():
     next_id += 1
     tasks.append(new_task)
 
+    save_tasks_to_file()
     return jsonify(new_task.to_dict()), 201
 
 
-# =============================
-# PUT /tasks/<id> -> actualizar estado (drag & drop)
-# Body:
-# { "estado": "TODO" | "IN_PROGRESS" | "DONE" }
-# =============================
 @app.route("/tasks/<int:task_id>", methods=["PUT"])
 def update_task_state(task_id):
     data = request.get_json(silent=True) or {}
@@ -94,16 +150,12 @@ def update_task_state(task_id):
     for t in tasks:
         if t.id == task_id:
             t.estado = nuevo_estado
+            save_tasks_to_file()
             return jsonify(t.to_dict()), 200
 
     return jsonify(error="Tarea no encontrada"), 404
 
 
-# =============================
-# PATCH /tasks/<id> -> editar campos
-# Body (puede incluir 1 o varios):
-# { "titulo": "...", "estimacion": 1-10, "asignado_a": "..." }
-# =============================
 @app.route("/tasks/<int:task_id>", methods=["PATCH"])
 def patch_task(task_id):
     data = request.get_json(silent=True) or {}
@@ -139,24 +191,20 @@ def patch_task(task_id):
         except (ValueError, TypeError):
             return jsonify(error="La estimación debe ser un entero entre 1 y 10"), 400
 
+    save_tasks_to_file()
     return jsonify(task.to_dict()), 200
 
 
-# =============================
-# DELETE /tasks/<id> -> eliminar
-# =============================
 @app.route("/tasks/<int:task_id>", methods=["DELETE"])
 def delete_task(task_id):
     for i, t in enumerate(tasks):
         if t.id == task_id:
             tasks.pop(i)
+            save_tasks_to_file()
             return jsonify(message="Tarea eliminada"), 200
 
     return jsonify(error="Tarea no encontrada"), 404
 
 
-# =============================
-# RUN
-# =============================
 if __name__ == "__main__":
     app.run(debug=True)
