@@ -4,26 +4,72 @@ let draggedTaskId = null;
 const DEFAULT_WIP_INPROGRESS = 20;
 
 // =============================
-// WIP IN_PROGRESS (1–20) + margen 10%
+// Sesión + roles
 // =============================
-function getWip() {
+function setSession(obj){ localStorage.setItem("session", JSON.stringify(obj)); }
+function getSession(){ try { return JSON.parse(localStorage.getItem("session")); } catch { return null; } }
+function clearSession(){ localStorage.removeItem("session"); }
+
+function role() {
+  const s = getSession();
+  return s?.rol || "guest";
+}
+
+function authHeaders() {
+  const s = getSession();
+  // guest: sin headers o rol guest
+  if (!s || s.rol === "guest") return {};
+  return { "X-User": s.usuario, "X-Role": s.rol };
+}
+
+function showApp(){
+  document.getElementById("login").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+}
+function showLogin(){
+  document.getElementById("app").classList.add("hidden");
+  document.getElementById("login").classList.remove("hidden");
+}
+
+// =============================
+// WIP (solo admin puede moverlo)
+// =============================
+function getWip(){
   const v = parseInt(localStorage.getItem("wip-IN_PROGRESS"), 10);
   return Number.isFinite(v) ? v : DEFAULT_WIP_INPROGRESS;
 }
-function setWip(v) {
-  localStorage.setItem("wip-IN_PROGRESS", String(v));
-}
-function wipAllowed(base) {
-  return Math.ceil(base * 1.10);
+function setWip(v){ localStorage.setItem("wip-IN_PROGRESS", String(v)); }
+function wipAllowed(base){ return Math.ceil(base * 1.10); }
+
+// =============================
+// UI permisos por rol
+// =============================
+function applyRolePermissions() {
+  const r = role();
+
+  // badge
+  document.getElementById("roleBadge").textContent = r.toUpperCase();
+
+  // WIP: solo admin
+  const wipSel = document.getElementById("wip-IN_PROGRESS");
+  wipSel.disabled = (r !== "admin");
+
+  // crear tarea: admin y member
+  const canWrite = (r === "admin" || r === "member");
+  document.getElementById("title").disabled = !canWrite;
+  document.getElementById("estimacion").disabled = !canWrite;
+  document.getElementById("asignado").disabled = !canWrite;
+  document.getElementById("createTaskBtn").disabled = !canWrite;
+
+  // si guest: ocultar formulario completo (opcional)
+  document.getElementById("task-form").style.opacity = canWrite ? "1" : "0.5";
 }
 
 // =============================
-// Cargar usuarios desde backend y llenar desplegable
+// Cargar usuarios dropdown
 // =============================
-async function loadUsers() {
+async function loadUsers(){
   const select = document.getElementById("asignado");
-  if (!select) return;
-
   select.innerHTML = `<option value="">Sin asignar</option>`;
 
   const res = await fetch(`${API}/users`);
@@ -32,22 +78,30 @@ async function loadUsers() {
   users.forEach(u => {
     const opt = document.createElement("option");
     opt.value = u.usuario;
-    opt.textContent = `${u.nombre} (${u.usuario})`;
+    opt.textContent = `${u.nombre || u.usuario} (${u.usuario})`;
     select.appendChild(opt);
   });
 }
 
 // =============================
-// Crear tarjeta (orden visual + editar + eliminar)
+// Card
 // =============================
-function createTaskCard(t) {
+function createTaskCard(t){
+  const r = role();
+
   const taskDiv = document.createElement("div");
   taskDiv.className = "task";
-  taskDiv.draggable = true;
   taskDiv.dataset.id = t.id;
-
-  // ✅ orden visual garantizado (10 arriba)
   taskDiv.style.order = String(1000 - t.estimacion);
+
+  // drag solo admin/member
+  const canMove = (r === "admin" || r === "member");
+  taskDiv.draggable = canMove;
+
+  taskDiv.addEventListener("dragstart", () => {
+    if (!canMove) return;
+    draggedTaskId = t.id;
+  });
 
   const info = document.createElement("div");
   info.className = "task-info";
@@ -62,85 +116,70 @@ function createTaskCard(t) {
   est.className = "estimacion-circle";
   est.textContent = t.estimacion;
 
-  // ✏️ Editar
-  const editBtn = document.createElement("button");
-  editBtn.type = "button";
-  editBtn.textContent = "✏️";
-  editBtn.title = "Editar tarea";
-  editBtn.style.border = "1px solid #333";
-  editBtn.style.background = "white";
-  editBtn.style.borderRadius = "6px";
-  editBtn.style.cursor = "pointer";
-  editBtn.style.padding = "2px 6px";
+  right.appendChild(est);
 
-  editBtn.addEventListener("mousedown", e => e.stopPropagation());
-  editBtn.addEventListener("click", async e => {
-    e.stopPropagation();
+  // botones solo admin/member (guest no)
+  const canEditDelete = (r === "admin" || r === "member");
 
-    const newTitle = prompt("Nuevo título:", t.titulo);
-    if (newTitle === null) return;
+  if (canEditDelete) {
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.textContent = "✏️";
+    editBtn.title = "Editar tarea";
+    editBtn.style.border = "1px solid #333";
+    editBtn.style.background = "white";
+    editBtn.style.borderRadius = "6px";
+    editBtn.style.cursor = "pointer";
+    editBtn.style.padding = "2px 6px";
 
-    const newAsignado = prompt("Nuevo asignado a (vacío = sin asignar):", t.asignado_a || "");
-    if (newAsignado === null) return;
+    editBtn.addEventListener("click", async () => {
+      const newTitle = prompt("Nuevo título:", t.titulo);
+      if (newTitle === null) return;
 
-    const newEst = prompt("Nueva estimación (1-10):", String(t.estimacion));
-    if (newEst === null) return;
+      const newAsignado = prompt("Nuevo asignado a (vacío = sin asignar):", t.asignado_a || "");
+      if (newAsignado === null) return;
 
-    const estInt = parseInt(newEst, 10);
+      const newEst = prompt("Nueva estimación (1-10):", String(t.estimacion));
+      if (newEst === null) return;
 
-    if (!newTitle.trim()) return alert("El título no puede estar vacío");
-    if (!Number.isFinite(estInt) || estInt < 1 || estInt > 10) {
-      return alert("La estimación debe ser un entero entre 1 y 10");
-    }
+      const estInt = parseInt(newEst, 10);
+      if (!newTitle.trim()) return alert("El título no puede estar vacío");
+      if (!Number.isFinite(estInt) || estInt < 1 || estInt > 10) return alert("Estimación 1-10");
 
-    const res = await fetch(`${API}/tasks/${t.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        titulo: newTitle.trim(),
-        asignado_a: newAsignado.trim(),
-        estimacion: estInt
-      })
+      const res = await fetch(`${API}/tasks/${t.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ titulo: newTitle.trim(), asignado_a: newAsignado.trim(), estimacion: estInt })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Error" }));
+        return alert(err.error || "No autorizado");
+      }
+      loadBoard();
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: "Error desconocido" }));
-      return alert(err.error || "Error al editar tarea");
-    }
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.textContent = "✖";
+    delBtn.title = "Eliminar tarea";
+    delBtn.style.border = "1px solid #333";
+    delBtn.style.background = "white";
+    delBtn.style.borderRadius = "6px";
+    delBtn.style.cursor = "pointer";
+    delBtn.style.padding = "2px 6px";
+    delBtn.style.fontWeight = "bold";
 
-    loadBoard();
-  });
+    delBtn.addEventListener("click", async () => {
+      if (!confirm("¿Eliminar esta tarea?")) return;
+      const res = await fetch(`${API}/tasks/${t.id}`, { method: "DELETE", headers: { ...authHeaders() } });
+      if (!res.ok) return alert("No autorizado");
+      loadBoard();
+    });
 
-  // ✖ Eliminar
-  const delBtn = document.createElement("button");
-  delBtn.type = "button";
-  delBtn.textContent = "✖";
-  delBtn.title = "Eliminar tarea";
-  delBtn.style.border = "1px solid #333";
-  delBtn.style.background = "white";
-  delBtn.style.borderRadius = "6px";
-  delBtn.style.cursor = "pointer";
-  delBtn.style.padding = "2px 6px";
-  delBtn.style.fontWeight = "bold";
-
-  delBtn.addEventListener("mousedown", e => e.stopPropagation());
-  delBtn.addEventListener("click", async e => {
-    e.stopPropagation();
-    const ok = confirm("¿Eliminar esta tarea?");
-    if (!ok) return;
-
-    await fetch(`${API}/tasks/${t.id}`, { method: "DELETE" });
-    loadBoard();
-  });
-
-  // Drag
-  taskDiv.addEventListener("dragstart", () => {
-    draggedTaskId = t.id;
-  });
-
-  right.appendChild(est);
-  right.appendChild(editBtn);
-  right.appendChild(delBtn);
+    right.appendChild(editBtn);
+    right.appendChild(delBtn);
+  }
 
   taskDiv.appendChild(info);
   taskDiv.appendChild(right);
@@ -149,15 +188,13 @@ function createTaskCard(t) {
 }
 
 // =============================
-// Cargar tablero + totales + conteos
+// Board
 // =============================
 let counts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
 
-async function loadBoard() {
-  // borrar tarjetas existentes
+async function loadBoard(){
   document.querySelectorAll(".task").forEach(t => t.remove());
 
-  // asegurar flex para order (por si el navegador cambia)
   document.querySelectorAll(".column").forEach(col => {
     col.style.display = "flex";
     col.style.flexDirection = "column";
@@ -175,48 +212,44 @@ async function loadBoard() {
 
   tasks.forEach(t => {
     const est = parseInt(t.estimacion, 10);
-    const status = t.estado;
-
-    if (!grouped[status] || !Number.isFinite(est)) return;
+    if (!Number.isFinite(est)) return;
+    if (!grouped[t.estado]) return;
 
     const task = { ...t, estimacion: est };
-    grouped[status].push(task);
-    totals[status] += est;
-    counts[status] += 1;
+    grouped[t.estado].push(task);
+    totals[t.estado] += est;
+    counts[t.estado] += 1;
   });
 
-  // ordenar por estimación desc
-  Object.keys(grouped).forEach(s => grouped[s].sort((a, b) => b.estimacion - a.estimacion));
+  Object.keys(grouped).forEach(s => grouped[s].sort((a,b) => b.estimacion - a.estimacion));
 
-  // render
   Object.keys(grouped).forEach(status => {
     const col = document.querySelector(`.column[data-status="${status}"]`);
     grouped[status].forEach(t => col.appendChild(createTaskCard(t)));
   });
 
-  // totales
   document.getElementById("total-TODO").textContent = totals.TODO;
   document.getElementById("total-IN_PROGRESS").textContent = totals.IN_PROGRESS;
   document.getElementById("total-DONE").textContent = totals.DONE;
 
-  // badge WIP (muestra el límite permitido con margen)
-  const base = getWip();
-  const allowed = wipAllowed(base);
+  const allowed = wipAllowed(getWip());
   document.getElementById("wipcount-IN_PROGRESS").textContent = `${counts.IN_PROGRESS}/${allowed}`;
 }
 
-// =============================
-// Drag & drop con WIP SOLO en IN_PROGRESS
-// =============================
+// Drag & drop
 document.querySelectorAll(".column").forEach(col => {
-  col.addEventListener("dragover", e => e.preventDefault());
+  col.addEventListener("dragover", e => {
+    if (role() === "guest") return;
+    e.preventDefault();
+  });
 
   col.addEventListener("drop", async () => {
+    if (role() === "guest") return;
     if (!draggedTaskId) return;
 
     const target = col.dataset.status;
 
-    // bloqueo solo si quieres mover a IN_PROGRESS
+    // WIP bloqueo (admin/member pueden mover tareas, pero wip lo define admin)
     if (target === "IN_PROGRESS") {
       const allowed = wipAllowed(getWip());
       if (counts.IN_PROGRESS >= allowed) {
@@ -226,53 +259,123 @@ document.querySelectorAll(".column").forEach(col => {
       }
     }
 
-    await fetch(`${API}/tasks/${draggedTaskId}`, {
+    const res = await fetch(`${API}/tasks/${draggedTaskId}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ estado: target })
     });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "No autorizado" }));
+      alert(err.error || "No autorizado");
+    }
 
     draggedTaskId = null;
     loadBoard();
   });
 });
 
-// =============================
 // Crear tarea
-// =============================
-document.getElementById("task-form").addEventListener("submit", async e => {
+document.getElementById("task-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (role() === "guest") return alert("Invitado: solo lectura");
 
   const titulo = document.getElementById("title").value.trim();
   const estimacion = parseInt(document.getElementById("estimacion").value, 10);
-  const asignado_a = document.getElementById("asignado").value; // usuario del dropdown
+  const asignado_a = document.getElementById("asignado").value;
 
   if (!titulo || !Number.isFinite(estimacion)) return;
 
-  await fetch(`${API}/tasks`, {
+  const res = await fetch(`${API}/tasks`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ titulo, estimacion, asignado_a })
   });
 
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "No autorizado" }));
+    return alert(err.error || "No autorizado");
+  }
+
   e.target.reset();
-  // recargar usuarios por si cambiaron en el fichero
   loadUsers();
   loadBoard();
 });
 
-// =============================
-// WIP select (1–20)
-// =============================
-document.getElementById("wip-IN_PROGRESS").addEventListener("change", e => {
+// WIP select: SOLO admin
+document.getElementById("wip-IN_PROGRESS").addEventListener("change", (e) => {
+  if (role() !== "admin") {
+    // rollback visual
+    e.target.value = String(getWip());
+    return alert("Solo el administrador puede cambiar el WIP");
+  }
   setWip(parseInt(e.target.value, 10));
   loadBoard();
 });
 
 // =============================
-// INIT
+// Login / Invitado
 // =============================
-setWip(getWip());
-document.getElementById("wip-IN_PROGRESS").value = String(getWip());
-loadUsers();
-loadBoard();
+async function doLogin(){
+  const usuario = document.getElementById("login-user").value.trim();
+  const pass = document.getElementById("login-pass").value.trim();
+
+  const res = await fetch(`${API}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ usuario, pass })
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok || !data.ok) {
+    alert(data.error || "Usuario no válido");
+    return;
+  }
+
+  setSession({ usuario: data.usuario, nombre: data.nombre || data.usuario, rol: data.rol || "member" });
+  initAfterLogin();
+}
+
+function doGuest(){
+  setSession({ usuario: null, nombre: "Invitado", rol: "guest" });
+  initAfterLogin();
+}
+
+function initAfterLogin(){
+  const s = getSession();
+  if (!s) return;
+
+  showApp();
+  document.getElementById("welcome").textContent = `Hola, ${s.nombre}`;
+
+  // set wip UI
+  const wipSel = document.getElementById("wip-IN_PROGRESS");
+  wipSel.value = String(getWip());
+
+  applyRolePermissions();
+  loadUsers();
+  loadBoard();
+}
+
+// logout
+document.getElementById("logout-btn").addEventListener("click", () => {
+  clearSession();
+  showLogin();
+});
+
+// login form submit
+document.getElementById("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await doLogin();
+});
+
+// guest btn
+document.getElementById("guest-btn").addEventListener("click", doGuest);
+
+// init
+window.addEventListener("DOMContentLoaded", () => {
+  const s = getSession();
+  if (s) initAfterLogin();
+  else showLogin();
+});
