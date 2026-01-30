@@ -4,20 +4,28 @@ let draggedTaskId = null;
 const DEFAULT_WIP_INPROGRESS = 20;
 
 // =============================
+// Toast
+// =============================
+function toast(msg){
+  const t = document.getElementById("toast");
+  const tt = document.getElementById("toastText");
+  if (!t || !tt) return alert(msg);
+  tt.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(()=> t.classList.remove("show"), 2200);
+}
+
+// =============================
 // Sesión + roles
 // =============================
 function setSession(obj){ localStorage.setItem("session", JSON.stringify(obj)); }
 function getSession(){ try { return JSON.parse(localStorage.getItem("session")); } catch { return null; } }
 function clearSession(){ localStorage.removeItem("session"); }
 
-function role() {
-  const s = getSession();
-  return s?.rol || "guest";
-}
-function username() {
-  const s = getSession();
-  return s?.usuario || null;
-}
+function role(){ return getSession()?.rol || "guest"; }
+function username(){ return getSession()?.usuario || null; }
+
 function authHeaders() {
   const s = getSession();
   if (!s || s.rol === "guest") return {};
@@ -34,7 +42,7 @@ function showLogin(){
 }
 
 // =============================
-// WIP (solo admin cambia)
+// WIP
 // =============================
 function getWip(){
   const v = parseInt(localStorage.getItem("wip-IN_PROGRESS"), 10);
@@ -44,25 +52,33 @@ function setWip(v){ localStorage.setItem("wip-IN_PROGRESS", String(v)); }
 function wipAllowed(base){ return Math.ceil(base * 1.10); }
 
 // =============================
-// UI permisos
+// Permisos UI
 // =============================
-function applyRolePermissions() {
+function applyRolePermissions(){
   const r = role();
-
   document.getElementById("roleBadge").textContent = r.toUpperCase();
+
+  // Mode chip
+  const modeChip = document.getElementById("modeChip");
+  if (modeChip){
+    if (r === "admin") modeChip.textContent = "Modo: Administrador";
+    else if (r === "member") modeChip.textContent = "Modo: Miembro";
+    else modeChip.textContent = "Modo: Invitado (solo lectura)";
+  }
 
   // WIP: solo admin
   const wipSel = document.getElementById("wip-IN_PROGRESS");
   wipSel.disabled = (r !== "admin");
+  document.getElementById("wipCard").classList.toggle("readonly", r !== "admin");
 
-  // crear tarea: admin y member
+  // crear tarea
   const canWrite = (r === "admin" || r === "member");
   document.getElementById("title").disabled = !canWrite;
   document.getElementById("estimacion").disabled = !canWrite;
   document.getElementById("asignado").disabled = !canWrite;
   document.getElementById("createTaskBtn").disabled = !canWrite;
 
-  document.getElementById("task-form").style.opacity = canWrite ? "1" : "0.5";
+  document.getElementById("controlsCard").classList.toggle("readonly", !canWrite);
 }
 
 // =============================
@@ -84,18 +100,25 @@ async function loadUsers(){
 }
 
 // =============================
-// Card
+// Reglas de movimiento
 // =============================
-function canCurrentUserMoveTask(task) {
+function canCurrentUserMoveTask(task){
   const r = role();
   if (r === "admin") return true;
-  if (r === "member") {
-    // ✅ solo si está asignada a su usuario
-    return task.asignado_a === username();
-  }
+  if (r === "member") return task.asignado_a === username();
   return false; // guest
 }
 
+function canCurrentUserEditTask(task){
+  const r = role();
+  if (r === "admin") return true;
+  if (r === "member") return task.asignado_a === username();
+  return false;
+}
+
+// =============================
+// Card render
+// =============================
 function createTaskCard(t){
   const taskDiv = document.createElement("div");
   taskDiv.className = "task";
@@ -106,55 +129,70 @@ function createTaskCard(t){
   taskDiv.draggable = movable;
 
   taskDiv.addEventListener("dragstart", () => {
-    if (!movable) {
-      draggedTaskId = null;
-      return;
-    }
+    if (!movable) { draggedTaskId = null; return; }
     draggedTaskId = t.id;
+    taskDiv.classList.add("dragging");
   });
 
-  const info = document.createElement("div");
-  info.className = "task-info";
-  info.textContent = `${t.titulo} (${t.asignado_a || "sin asignar"})`;
+  taskDiv.addEventListener("dragend", () => {
+    taskDiv.classList.remove("dragging");
+  });
+
+  const main = document.createElement("div");
+  main.className = "task-main";
+
+  const title = document.createElement("div");
+  title.className = "task-title";
+  title.textContent = t.titulo;
+
+  const sub = document.createElement("div");
+  sub.className = "task-sub";
+
+  const who = document.createElement("span");
+  who.className = "tag";
+  who.textContent = t.asignado_a ? `@${t.asignado_a}` : "sin asignar";
+
+  const lock = document.createElement("span");
+  lock.className = "tag";
+  lock.textContent = movable ? "movible" : (role()==="guest" ? "solo lectura" : "no asignada a ti");
+
+  sub.appendChild(who);
+  sub.appendChild(lock);
+
+  main.appendChild(title);
+  main.appendChild(sub);
 
   const right = document.createElement("div");
-  right.style.display = "flex";
-  right.style.alignItems = "center";
-  right.style.gap = "8px";
+  right.className = "task-right";
 
   const est = document.createElement("div");
-  est.className = "estimacion-circle";
+  est.className = "est-bubble";
   est.textContent = t.estimacion;
 
   right.appendChild(est);
 
-  // botones editar/eliminar: admin todo, member solo si es su tarea
-  const canEditDelete = (role() === "admin") || (role() === "member" && t.asignado_a === username());
-
-  if (canEditDelete) {
+  // acciones
+  const canEdit = canCurrentUserEditTask(t);
+  if (canEdit){
     const editBtn = document.createElement("button");
+    editBtn.className = "icon-btn";
     editBtn.type = "button";
+    editBtn.title = "Editar";
     editBtn.textContent = "✏️";
-    editBtn.title = "Editar tarea";
-    editBtn.style.border = "1px solid #333";
-    editBtn.style.background = "white";
-    editBtn.style.borderRadius = "6px";
-    editBtn.style.cursor = "pointer";
-    editBtn.style.padding = "2px 6px";
 
     editBtn.addEventListener("click", async () => {
       const newTitle = prompt("Nuevo título:", t.titulo);
       if (newTitle === null) return;
 
-      const newAsignado = prompt("Nuevo asignado a (vacío = sin asignar):", t.asignado_a || "");
+      const newAsignado = prompt("Nuevo asignado a (usuario, vacío = sin asignar):", t.asignado_a || "");
       if (newAsignado === null) return;
 
       const newEst = prompt("Nueva estimación (1-10):", String(t.estimacion));
       if (newEst === null) return;
 
       const estInt = parseInt(newEst, 10);
-      if (!newTitle.trim()) return alert("El título no puede estar vacío");
-      if (!Number.isFinite(estInt) || estInt < 1 || estInt > 10) return alert("Estimación 1-10");
+      if (!newTitle.trim()) return toast("El título no puede estar vacío");
+      if (!Number.isFinite(estInt) || estInt < 1 || estInt > 10) return toast("Estimación debe ser 1–10");
 
       const res = await fetch(`${API}/tasks/${t.id}`, {
         method: "PATCH",
@@ -162,31 +200,28 @@ function createTaskCard(t){
         body: JSON.stringify({ titulo: newTitle.trim(), asignado_a: newAsignado.trim(), estimacion: estInt })
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "No autorizado" }));
-        return alert(err.error || "No autorizado");
+      if (!res.ok){
+        const err = await res.json().catch(()=>({error:"No autorizado"}));
+        return toast(err.error || "No autorizado");
       }
+      toast("Tarea actualizada");
       loadBoard();
     });
 
     const delBtn = document.createElement("button");
+    delBtn.className = "icon-btn";
     delBtn.type = "button";
-    delBtn.textContent = "✖";
-    delBtn.title = "Eliminar tarea";
-    delBtn.style.border = "1px solid #333";
-    delBtn.style.background = "white";
-    delBtn.style.borderRadius = "6px";
-    delBtn.style.cursor = "pointer";
-    delBtn.style.padding = "2px 6px";
-    delBtn.style.fontWeight = "bold";
+    delBtn.title = "Eliminar";
+    delBtn.textContent = "🗑️";
 
     delBtn.addEventListener("click", async () => {
       if (!confirm("¿Eliminar esta tarea?")) return;
       const res = await fetch(`${API}/tasks/${t.id}`, { method: "DELETE", headers: { ...authHeaders() } });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "No autorizado" }));
-        return alert(err.error || "No autorizado");
+      if (!res.ok){
+        const err = await res.json().catch(()=>({error:"No autorizado"}));
+        return toast(err.error || "No autorizado");
       }
+      toast("Tarea eliminada");
       loadBoard();
     });
 
@@ -194,7 +229,7 @@ function createTaskCard(t){
     right.appendChild(delBtn);
   }
 
-  taskDiv.appendChild(info);
+  taskDiv.appendChild(main);
   taskDiv.appendChild(right);
 
   return taskDiv;
@@ -206,15 +241,8 @@ function createTaskCard(t){
 let counts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
 
 async function loadBoard(){
+  // limpiar cards
   document.querySelectorAll(".task").forEach(t => t.remove());
-
-  document.querySelectorAll(".column").forEach(col => {
-    col.style.display = "flex";
-    col.style.flexDirection = "column";
-    col.style.gap = "8px";
-    const header = col.querySelector("h3");
-    if (header) header.style.order = "-9999";
-  });
 
   const res = await fetch(`${API}/tasks`);
   const tasks = await res.json();
@@ -234,22 +262,29 @@ async function loadBoard(){
     counts[t.estado] += 1;
   });
 
-  Object.keys(grouped).forEach(s => grouped[s].sort((a,b) => b.estimacion - a.estimacion));
+  // ordenar por estimación desc
+  Object.keys(grouped).forEach(s => grouped[s].sort((a,b)=> b.estimacion - a.estimacion));
 
+  // render
   Object.keys(grouped).forEach(status => {
     const col = document.querySelector(`.column[data-status="${status}"]`);
     grouped[status].forEach(t => col.appendChild(createTaskCard(t)));
   });
 
+  // totals
   document.getElementById("total-TODO").textContent = totals.TODO;
   document.getElementById("total-IN_PROGRESS").textContent = totals.IN_PROGRESS;
   document.getElementById("total-DONE").textContent = totals.DONE;
 
+  // wip label + badge
   const allowed = wipAllowed(getWip());
   document.getElementById("wipcount-IN_PROGRESS").textContent = `${counts.IN_PROGRESS}/${allowed}`;
+  document.getElementById("wipLabel").textContent = `Permitidas: ${allowed} (base ${getWip()})`;
 }
 
+// =============================
 // Drag & drop
+// =============================
 document.querySelectorAll(".column").forEach(col => {
   col.addEventListener("dragover", e => {
     if (role() === "guest") return;
@@ -265,7 +300,7 @@ document.querySelectorAll(".column").forEach(col => {
     if (target === "IN_PROGRESS") {
       const allowed = wipAllowed(getWip());
       if (counts.IN_PROGRESS >= allowed) {
-        alert(`WIP límite alcanzado en IN PROGRESS (${counts.IN_PROGRESS}/${allowed}).`);
+        toast(`WIP límite alcanzado (${counts.IN_PROGRESS}/${allowed})`);
         draggedTaskId = null;
         return;
       }
@@ -277,9 +312,11 @@ document.querySelectorAll(".column").forEach(col => {
       body: JSON.stringify({ estado: target })
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: "No autorizado" }));
-      alert(err.error || "No autorizado");
+    if (!res.ok){
+      const err = await res.json().catch(()=>({error:"No autorizado"}));
+      toast(err.error || "No autorizado");
+    } else {
+      toast("Estado actualizado");
     }
 
     draggedTaskId = null;
@@ -287,10 +324,12 @@ document.querySelectorAll(".column").forEach(col => {
   });
 });
 
+// =============================
 // Crear tarea
+// =============================
 document.getElementById("task-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  if (role() === "guest") return alert("Invitado: solo lectura");
+  if (role() === "guest") return toast("Invitado: solo lectura");
 
   const titulo = document.getElementById("title").value.trim();
   const estimacion = parseInt(document.getElementById("estimacion").value, 10);
@@ -304,23 +343,27 @@ document.getElementById("task-form").addEventListener("submit", async (e) => {
     body: JSON.stringify({ titulo, estimacion, asignado_a })
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "No autorizado" }));
-    return alert(err.error || "No autorizado");
+  if (!res.ok){
+    const err = await res.json().catch(()=>({error:"No autorizado"}));
+    return toast(err.error || "No autorizado");
   }
 
   e.target.reset();
-  loadUsers();
+  await loadUsers();
+  toast("Tarea creada");
   loadBoard();
 });
 
-// WIP select: solo admin
+// =============================
+// WIP: solo admin
+// =============================
 document.getElementById("wip-IN_PROGRESS").addEventListener("change", (e) => {
   if (role() !== "admin") {
     e.target.value = String(getWip());
-    return alert("Solo el administrador puede cambiar el WIP");
+    return toast("Solo admin puede cambiar WIP");
   }
   setWip(parseInt(e.target.value, 10));
+  toast("WIP actualizado");
   loadBoard();
 });
 
@@ -337,10 +380,10 @@ async function doLogin(){
     body: JSON.stringify({ usuario, pass })
   });
 
-  const data = await res.json().catch(() => ({}));
+  const data = await res.json().catch(()=> ({}));
 
-  if (!res.ok || !data.ok) {
-    alert(data.error || "Usuario no válido");
+  if (!res.ok || !data.ok){
+    toast(data.error || "Usuario no válido");
     return;
   }
 
@@ -359,8 +402,8 @@ function initAfterLogin(){
 
   showApp();
   document.getElementById("welcome").textContent = `Hola, ${s.nombre}`;
-  document.getElementById("roleBadge").textContent = role().toUpperCase();
 
+  // wip select value
   document.getElementById("wip-IN_PROGRESS").value = String(getWip());
 
   applyRolePermissions();
@@ -371,6 +414,7 @@ function initAfterLogin(){
 document.getElementById("logout-btn").addEventListener("click", () => {
   clearSession();
   showLogin();
+  toast("Sesión cerrada");
 });
 
 document.getElementById("login-form").addEventListener("submit", async (e) => {
@@ -380,6 +424,7 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
 
 document.getElementById("guest-btn").addEventListener("click", doGuest);
 
+// init
 window.addEventListener("DOMContentLoaded", () => {
   const s = getSession();
   if (s) initAfterLogin();

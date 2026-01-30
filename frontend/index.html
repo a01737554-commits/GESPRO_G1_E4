@@ -3,136 +3,611 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Kanban – Login</title>
+  <title>TaskFlow – Kanban</title>
 
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    .box { max-width: 560px; border: 1px solid #ddd; border-radius: 10px; padding: 16px; background:#fff; }
-    .hidden { display:none; }
-    input, select, button { padding: 8px; margin-right: 6px; }
-    button { cursor:pointer; }
+    :root{
+      --bg: #0b1020;
+      --panel: rgba(255,255,255,.06);
+      --panel2: rgba(255,255,255,.08);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.65);
+      --border: rgba(255,255,255,.12);
+      --shadow: 0 18px 50px rgba(0,0,0,.35);
+      --shadow2: 0 10px 25px rgba(0,0,0,.25);
+      --radius: 18px;
 
-    .topbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:10px; }
+      --todo: #ff4d4d;
+      --prog: #ff9f1a;
+      --done: #2ecc71;
 
-    .wip-bar{ margin-top:10px; display:flex; align-items:center; gap:10px; }
-    .wip-select{ border:1px solid #333; border-radius:8px; padding:2px 6px; background:#fff; font-weight:bold; font-size:12px; }
-    .wip-count{ padding:2px 8px; border-radius:999px; border:1px solid #333; background:#fff; font-size:12px; font-weight:bold; margin-right:8px; }
-
-    .kanban{ display:flex; gap:20px; margin-top:20px; }
-    .column{ width:30%; padding:10px; border-radius:8px; }
-
-    .column[data-status="TODO"]{ background:#fdecea; border-top:6px solid #e53935; }
-    .column[data-status="IN_PROGRESS"]{ background:#fff4e5; border-top:6px solid #fb8c00; }
-    .column[data-status="DONE"]{ background:#e8f5e9; border-top:6px solid #43a047; }
-
-    .column h3{ display:flex; justify-content:space-between; align-items:center; margin-top:0; gap:10px; }
-    .header-left{ display:flex; align-items:center; gap:10px; }
-
-    .column-total{
-      width:26px; height:26px; border-radius:50%;
-      background:#fff; border:2px solid #333;
-      display:flex; align-items:center; justify-content:center;
-      font-weight:bold; font-size:13px;
+      --chip: rgba(255,255,255,.10);
+      --chip2: rgba(255,255,255,.14);
+      --white: #fff;
     }
 
-    .task{
-      background:#fff; padding:8px 10px; border-radius:6px;
-      display:flex; justify-content:space-between; align-items:center;
-      border:1px solid #ddd; cursor:grab;
+    *{ box-sizing: border-box; }
+    body{
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 800px at 15% 10%, rgba(110,231,255,.18), transparent 55%),
+        radial-gradient(1000px 700px at 85% 15%, rgba(255,118,185,.16), transparent 55%),
+        radial-gradient(900px 700px at 50% 90%, rgba(132,255,171,.10), transparent 55%),
+        linear-gradient(180deg, #070a14 0%, #0b1020 65%, #0b1020 100%);
+      min-height: 100vh;
+      padding: 28px;
     }
-    .task-info{ font-size:14px; }
 
-    .estimacion-circle{
-      width:26px; height:26px; border-radius:50%;
-      background:#fff; border:2px solid #333;
-      display:flex; align-items:center; justify-content:center;
-      font-weight:bold; font-size:13px;
+    .app-shell{
+      max-width: 1220px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    /* Top header */
+    .topbar{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 18px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
+      box-shadow: var(--shadow2);
+      backdrop-filter: blur(12px);
+    }
+
+    .brand{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo{
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background:
+        radial-gradient(circle at 30% 30%, rgba(255,255,255,.35), transparent 45%),
+        linear-gradient(135deg, rgba(110,231,255,.65), rgba(255,118,185,.55));
+      box-shadow: 0 12px 30px rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.18);
+    }
+
+    .brand h1{
+      font-size: 18px;
+      margin: 0;
+      letter-spacing: .2px;
+    }
+    .brand p{
+      margin: 2px 0 0;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    .top-actions{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .chip{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 12.5px;
+    }
+    .chip .dot{
+      width: 8px; height: 8px; border-radius: 999px;
+      background: rgba(255,255,255,.65);
     }
 
     .role-badge{
-      padding:2px 8px; border:1px solid #333; border-radius:999px; background:#fff;
-      font-size:12px; font-weight:bold;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.10);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .6px;
+    }
+
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.08);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform .08s ease, background .2s ease, border-color .2s ease;
+      user-select: none;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .btn:hover{ background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.18); }
+    .btn:active{ transform: translateY(1px); }
+
+    .btn.primary{
+      background: linear-gradient(135deg, rgba(110,231,255,.45), rgba(255,118,185,.35));
+      border-color: rgba(255,255,255,.22);
+    }
+    .btn.primary:hover{ background: linear-gradient(135deg, rgba(110,231,255,.55), rgba(255,118,185,.42)); }
+
+    .btn.danger{
+      background: rgba(255,77,77,.12);
+      border-color: rgba(255,77,77,.25);
+    }
+
+    /* Cards */
+    .card{
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
+      box-shadow: var(--shadow2);
+      backdrop-filter: blur(12px);
+      padding: 16px;
+    }
+
+    /* Login */
+    #login.card{
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .login-grid{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .field{
+      display:flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .label{
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    input, select{
+      width: 100%;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(12, 16, 32, .55);
+      color: var(--text);
+      outline: none;
+      transition: border-color .2s ease, background .2s ease;
+    }
+    input:focus, select:focus{
+      border-color: rgba(110,231,255,.55);
+      background: rgba(12, 16, 32, .72);
+    }
+
+    .login-actions{
+      margin-top: 14px;
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .hint{
+      margin-top: 10px;
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    /* Controls row */
+    .controls{
+      display:grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+    @media (max-width: 980px){
+      .controls{ grid-template-columns: 1fr; }
+      .login-grid{ grid-template-columns: 1fr; }
+      .kanban{ grid-template-columns: 1fr; }
+    }
+
+    .form-row{
+      display:grid;
+      grid-template-columns: 1.5fr .8fr 1.2fr auto;
+      gap: 10px;
+      align-items: end;
+    }
+    @media (max-width: 980px){
+      .form-row{ grid-template-columns: 1fr; }
+    }
+
+    .readonly{
+      opacity: .55;
+      filter: grayscale(.15);
+    }
+
+    /* Kanban */
+    .kanban{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    .column{
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: rgba(255,255,255,.04);
+      box-shadow: var(--shadow2);
+      padding: 12px;
+      display:flex;
+      flex-direction: column;
+      min-height: 420px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .col-top{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 8px 12px;
+      border-bottom: 1px dashed rgba(255,255,255,.12);
+      margin-bottom: 10px;
+    }
+    .col-title{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      font-weight: 800;
+      letter-spacing: .6px;
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+    .col-pill{
+      display:flex;
+      align-items:center;
+      gap: 8px;
+    }
+
+    .status-dot{
+      width: 10px; height: 10px; border-radius: 999px;
+      box-shadow: 0 0 0 4px rgba(255,255,255,.06);
+    }
+    .todo-dot{ background: var(--todo); }
+    .prog-dot{ background: var(--prog); }
+    .done-dot{ background: var(--done); }
+
+    .circle{
+      width: 30px; height: 30px; border-radius: 999px;
+      background: rgba(255,255,255,.92);
+      color: #0b1020;
+      display:flex; align-items:center; justify-content:center;
+      font-weight: 900;
+      font-size: 13px;
+      border: 1px solid rgba(255,255,255,.25);
+      box-shadow: 0 10px 18px rgba(0,0,0,.20);
+    }
+
+    .wip-badge{
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.08);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    /* Tasks */
+    .task{
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.05));
+      box-shadow: 0 12px 30px rgba(0,0,0,.22);
+      padding: 12px 12px;
+      display:flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      transition: transform .12s ease, border-color .2s ease, background .2s ease;
+    }
+    .task:hover{
+      transform: translateY(-2px);
+      border-color: rgba(255,255,255,.22);
+      background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
+    }
+
+    .task.dragging{
+      opacity: .7;
+      transform: scale(.99);
+      border-color: rgba(110,231,255,.45);
+      box-shadow: 0 18px 45px rgba(0,0,0,.35);
+    }
+
+    .task-main{
+      display:flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+    .task-title{
+      font-weight: 800;
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .task-sub{
+      display:flex;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      flex-wrap: wrap;
+    }
+
+    .tag{
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.07);
+      font-weight: 700;
+      font-size: 11.5px;
+      letter-spacing: .2px;
+    }
+
+    .task-right{
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .est-bubble{
+      width: 34px; height: 34px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.95);
+      color: #0b1020;
+      display:flex; align-items:center; justify-content:center;
+      font-weight: 900;
+      border: 1px solid rgba(255,255,255,.25);
+    }
+
+    .icon-btn{
+      width: 34px; height: 34px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      cursor: pointer;
+      display:flex; align-items:center; justify-content:center;
+      transition: background .2s ease, transform .08s ease, border-color .2s ease;
+    }
+    .icon-btn:hover{ background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.20); }
+    .icon-btn:active{ transform: translateY(1px); }
+
+    .toast{
+      position: fixed;
+      bottom: 18px; left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(10,14,30,.85);
+      color: var(--text);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+      display:none;
+      gap: 10px;
+      align-items:center;
+      max-width: 560px;
+    }
+    .toast.show{ display:flex; }
+    .toast .mini-dot{ width:10px; height:10px; border-radius:999px; background: rgba(110,231,255,.75); }
+
+    .subtle{
+      color: var(--muted);
+      font-size: 12.5px;
+    }
+
+    .divider{
+      height: 1px;
+      background: rgba(255,255,255,.10);
+      margin: 12px 0;
     }
   </style>
 </head>
 
 <body>
+  <div class="app-shell">
 
-  <!-- LOGIN -->
-  <div id="login" class="box">
-    <h2>Inicio de sesión</h2>
-
-    <form id="login-form">
-      <div style="display:flex; gap:8px; margin-bottom: 8px;">
-        <input id="login-user" placeholder="Usuario" autocomplete="username" />
-        <input id="login-pass" type="password" placeholder="Contraseña" autocomplete="current-password" />
+    <!-- LOGIN -->
+    <div id="login" class="card">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>TaskFlow</h1>
+          <p>Gestor Kanban con WIP, roles y persistencia</p>
+        </div>
       </div>
 
-      <button type="submit">Entrar</button>
-      <button id="guest-btn" type="button">Entrar como invitado</button>
-    </form>
+      <div class="divider"></div>
+
+      <form id="login-form">
+        <div class="login-grid">
+          <div class="field">
+            <div class="label">Usuario</div>
+            <input id="login-user" placeholder="Ej: jrodriguez" autocomplete="username" />
+          </div>
+          <div class="field">
+            <div class="label">Contraseña</div>
+            <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password" />
+          </div>
+        </div>
+
+        <div class="login-actions">
+          <button class="btn primary" type="submit">Entrar</button>
+          <button class="btn" id="guest-btn" type="button">Entrar como invitado</button>
+        </div>
+
+        <div class="hint">
+          <b>Roles:</b> Admin controla WIP y todo el flujo. Miembros gestionan sus tareas asignadas. Invitado es solo lectura.
+        </div>
+      </form>
+    </div>
+
+    <!-- APP -->
+    <div id="app" class="hidden">
+      <div class="topbar">
+        <div class="brand">
+          <div class="logo"></div>
+          <div>
+            <h1 style="margin:0; font-size:18px;">TaskFlow</h1>
+            <p style="margin:2px 0 0;">Tablero Kanban con estimación, asignación y WIP</p>
+          </div>
+        </div>
+
+        <div class="top-actions">
+          <span class="chip"><span class="dot"></span><span id="welcome">Hola</span></span>
+          <span class="role-badge" id="roleBadge">GUEST</span>
+          <button class="btn danger" id="logout-btn" type="button">Cerrar sesión</button>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="card" id="controlsCard">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+            <div>
+              <div style="font-weight:900; letter-spacing:.2px;">Nueva tarea</div>
+              <div class="subtle">Crea tareas con estimación (1–10) y asignación por usuario.</div>
+            </div>
+            <span class="chip" id="modeChip">Modo: —</span>
+          </div>
+
+          <div class="divider"></div>
+
+          <form id="task-form">
+            <div class="form-row">
+              <div class="field">
+                <div class="label">Título</div>
+                <input id="title" placeholder="Ej: Integrar endpoint /tasks" required />
+              </div>
+
+              <div class="field">
+                <div class="label">Estimación</div>
+                <select id="estimacion" required>
+                  <option value="">—</option>
+                  <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                  <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                  <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+                  <option value="10">10</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <div class="label">Asignar a</div>
+                <select id="asignado">
+                  <option value="">Sin asignar</option>
+                </select>
+              </div>
+
+              <button class="btn primary" type="submit" id="createTaskBtn">Agregar</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card" id="wipCard">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+            <div>
+              <div style="font-weight:900; letter-spacing:.2px;">WIP (IN PROGRESS)</div>
+              <div class="subtle">Admin define límite. Se permite +10% de margen.</div>
+            </div>
+            <span class="chip"><span class="dot"></span><span id="wipLabel">—</span></span>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="field">
+            <div class="label">Límite WIP (1–20)</div>
+            <select id="wip-IN_PROGRESS">
+              <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+              <option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
+              <option>11</option><option>12</option><option>13</option><option>14</option><option>15</option>
+              <option>16</option><option>17</option><option>18</option><option>19</option>
+              <option selected>20</option>
+            </select>
+          </div>
+
+          <div class="hint" style="margin-top:12px;">
+            Tip: si eres miembro, podrás mover únicamente tus tareas asignadas.
+          </div>
+        </div>
+      </div>
+
+      <div class="kanban">
+        <div class="column" data-status="TODO">
+          <div class="col-top">
+            <div class="col-title">
+              <span class="status-dot todo-dot"></span>
+              TODO
+            </div>
+            <div class="col-pill">
+              <div class="circle" id="total-TODO">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="column" data-status="IN_PROGRESS">
+          <div class="col-top">
+            <div class="col-title">
+              <span class="status-dot prog-dot"></span>
+              IN PROGRESS
+              <span class="wip-badge" id="wipcount-IN_PROGRESS">0/22</span>
+            </div>
+            <div class="col-pill">
+              <div class="circle" id="total-IN_PROGRESS">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="column" data-status="DONE">
+          <div class="col-top">
+            <div class="col-title">
+              <span class="status-dot done-dot"></span>
+              DONE
+            </div>
+            <div class="col-pill">
+              <div class="circle" id="total-DONE">0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
   </div>
 
-  <!-- APP -->
-  <div id="app" class="hidden">
-    <div class="topbar">
-      <h1 style="margin:0;">Administrador de Tareas – Kanban</h1>
-      <div style="display:flex; align-items:center; gap:10px;">
-        <span id="welcome"></span>
-        <span class="role-badge" id="roleBadge"></span>
-        <button id="logout-btn" type="button">Cerrar sesión</button>
-      </div>
-    </div>
-
-    <h2>Nueva tarea</h2>
-    <form id="task-form">
-      <input id="title" placeholder="Título" required />
-
-      <select id="estimacion" required>
-        <option value="">Estimación</option>
-        <option value="1">1</option><option value="2">2</option><option value="3">3</option>
-        <option value="4">4</option><option value="5">5</option><option value="6">6</option>
-        <option value="7">7</option><option value="8">8</option><option value="9">9</option>
-        <option value="10">10</option>
-      </select>
-
-      <select id="asignado">
-        <option value="">Sin asignar</option>
-      </select>
-
-      <button type="submit" id="createTaskBtn">Agregar</button>
-    </form>
-
-    <div class="wip-bar">
-      <strong>WIP límite (IN PROGRESS):</strong>
-      <select class="wip-select" id="wip-IN_PROGRESS">
-        <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
-        <option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
-        <option>11</option><option>12</option><option>13</option><option>14</option><option>15</option>
-        <option>16</option><option>17</option><option>18</option><option>19</option>
-        <option selected>20</option>
-      </select>
-    </div>
-
-    <div class="kanban">
-      <div class="column" data-status="TODO">
-        <h3><span class="header-left">TODO</span><span class="column-total" id="total-TODO">0</span></h3>
-      </div>
-
-      <div class="column" data-status="IN_PROGRESS">
-        <h3>
-          <span class="header-left">
-            IN PROGRESS
-            <span class="wip-count" id="wipcount-IN_PROGRESS">0/22</span>
-          </span>
-          <span class="column-total" id="total-IN_PROGRESS">0</span>
-        </h3>
-      </div>
-
-      <div class="column" data-status="DONE">
-        <h3><span class="header-left">DONE</span><span class="column-total" id="total-DONE">0</span></h3>
-      </div>
-    </div>
+  <div class="toast" id="toast">
+    <div class="mini-dot"></div>
+    <div id="toastText">Mensaje</div>
   </div>
 
   <script src="js/main.js"></script>
