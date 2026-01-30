@@ -106,17 +106,11 @@ def load_users_raw():
             password = parts[1]
             full_name = parts[2] if len(parts) >= 3 else ""
             role = parts[3].lower() if len(parts) >= 4 and parts[3].strip() else "member"
-
             if role not in {"admin", "member"}:
                 role = "member"
 
             if username and password:
-                users.append({
-                    "usuario": username,
-                    "pass": password,
-                    "nombre": full_name,
-                    "rol": role
-                })
+                users.append({"usuario": username, "pass": password, "nombre": full_name, "rol": role})
     return users
 
 
@@ -128,21 +122,18 @@ def get_user_by_username(username: str):
 
 
 def load_users_public():
-    """Para dropdown: sin password"""
     return [{"usuario": u["usuario"], "nombre": u.get("nombre", ""), "rol": u.get("rol", "member")} for u in load_users_raw()]
 
 
 # =============================
 # AUTH: headers X-User y X-Role
-# Si no vienen -> guest
-# Backend valida que el rol coincida con el del fichero
 # =============================
 def get_identity_from_headers():
     username = (request.headers.get("X-User") or "").strip()
     role = (request.headers.get("X-Role") or "").strip().lower()
 
     if not username or not role:
-        return {"usuario": None, "rol": "guest"}  # invitado por defecto
+        return {"usuario": None, "rol": "guest"}
 
     if role == "guest":
         return {"usuario": None, "rol": "guest"}
@@ -151,7 +142,7 @@ def get_identity_from_headers():
     if not u:
         return {"usuario": None, "rol": "guest"}
 
-    # Si el rol enviado no coincide con el del archivo, lo tratamos como guest
+    # si el rol enviado no coincide con el del archivo -> guest
     if u.get("rol", "member") != role:
         return {"usuario": None, "rol": "guest"}
 
@@ -165,12 +156,28 @@ def require_not_guest():
     return True, ident
 
 
+def find_task(task_id: int):
+    for t in tasks:
+        if t.id == task_id:
+            return t
+    return None
+
+
+def can_member_modify_task(ident, task: Task):
+    """Admin puede todo. Member solo si la tarea está asignada a su usuario."""
+    if ident["rol"] == "admin":
+        return True
+    if ident["rol"] == "member":
+        # Solo tareas asignadas EXACTAMENTE a su usuario
+        return (task.asignado_a == ident["usuario"])
+    return False
+
+
 # =============================
 # ENDPOINTS
 # =============================
 @app.route("/users", methods=["GET"])
 def get_users():
-    # cualquiera puede ver la lista (para dropdown)
     return jsonify(load_users_public())
 
 
@@ -219,14 +226,7 @@ def create_task():
     except (ValueError, TypeError):
         return jsonify(error="La estimación debe ser un entero entre 1 y 10"), 400
 
-    new_task = Task(
-        id=next_id,
-        titulo=titulo,
-        estado="TODO",
-        estimacion=estimacion,
-        asignado_a=asignado_a
-    )
-
+    new_task = Task(id=next_id, titulo=titulo, estado="TODO", estimacion=estimacion, asignado_a=asignado_a)
     next_id += 1
     tasks.append(new_task)
     save_tasks_to_file()
@@ -241,17 +241,20 @@ def update_task_state(task_id):
 
     data = request.get_json(silent=True) or {}
     nuevo_estado = data.get("estado")
-
     if nuevo_estado not in {"TODO", "IN_PROGRESS", "DONE"}:
         return jsonify(error="Estado inválido. Usa TODO, IN_PROGRESS o DONE."), 400
 
-    for t in tasks:
-        if t.id == task_id:
-            t.estado = nuevo_estado
-            save_tasks_to_file()
-            return jsonify(t.to_dict()), 200
+    task = find_task(task_id)
+    if task is None:
+        return jsonify(error="Tarea no encontrada"), 404
 
-    return jsonify(error="Tarea no encontrada"), 404
+    # ✅ permiso: admin todo, member solo si está asignada a él
+    if not can_member_modify_task(ident, task):
+        return jsonify(error="No autorizado: solo puedes mover tareas asignadas a ti"), 403
+
+    task.estado = nuevo_estado
+    save_tasks_to_file()
+    return jsonify(task.to_dict()), 200
 
 
 @app.route("/tasks/<int:task_id>", methods=["PATCH"])
@@ -260,15 +263,15 @@ def patch_task(task_id):
     if not ok:
         return jsonify(error="No autorizado (guest)"), 403
 
-    data = request.get_json(silent=True) or {}
-
-    task = None
-    for t in tasks:
-        if t.id == task_id:
-            task = t
-            break
+    task = find_task(task_id)
     if task is None:
         return jsonify(error="Tarea no encontrada"), 404
+
+    # ✅ permiso: admin todo, member solo si está asignada a él
+    if not can_member_modify_task(ident, task):
+        return jsonify(error="No autorizado: solo puedes editar tareas asignadas a ti"), 403
+
+    data = request.get_json(silent=True) or {}
 
     if "titulo" in data:
         titulo = (data.get("titulo") or "").strip()
@@ -299,13 +302,17 @@ def delete_task(task_id):
     if not ok:
         return jsonify(error="No autorizado (guest)"), 403
 
-    for i, t in enumerate(tasks):
-        if t.id == task_id:
-            tasks.pop(i)
-            save_tasks_to_file()
-            return jsonify(message="Tarea eliminada"), 200
+    task = find_task(task_id)
+    if task is None:
+        return jsonify(error="Tarea no encontrada"), 404
 
-    return jsonify(error="Tarea no encontrada"), 404
+    # ✅ permiso: admin todo, member solo si está asignada a él
+    if not can_member_modify_task(ident, task):
+        return jsonify(error="No autorizado: solo puedes eliminar tareas asignadas a ti"), 403
+
+    tasks.remove(task)
+    save_tasks_to_file()
+    return jsonify(message="Tarea eliminada"), 200
 
 
 if __name__ == "__main__":

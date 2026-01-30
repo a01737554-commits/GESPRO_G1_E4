@@ -14,10 +14,12 @@ function role() {
   const s = getSession();
   return s?.rol || "guest";
 }
-
+function username() {
+  const s = getSession();
+  return s?.usuario || null;
+}
 function authHeaders() {
   const s = getSession();
-  // guest: sin headers o rol guest
   if (!s || s.rol === "guest") return {};
   return { "X-User": s.usuario, "X-Role": s.rol };
 }
@@ -32,7 +34,7 @@ function showLogin(){
 }
 
 // =============================
-// WIP (solo admin puede moverlo)
+// WIP (solo admin cambia)
 // =============================
 function getWip(){
   const v = parseInt(localStorage.getItem("wip-IN_PROGRESS"), 10);
@@ -42,12 +44,11 @@ function setWip(v){ localStorage.setItem("wip-IN_PROGRESS", String(v)); }
 function wipAllowed(base){ return Math.ceil(base * 1.10); }
 
 // =============================
-// UI permisos por rol
+// UI permisos
 // =============================
 function applyRolePermissions() {
   const r = role();
 
-  // badge
   document.getElementById("roleBadge").textContent = r.toUpperCase();
 
   // WIP: solo admin
@@ -61,12 +62,11 @@ function applyRolePermissions() {
   document.getElementById("asignado").disabled = !canWrite;
   document.getElementById("createTaskBtn").disabled = !canWrite;
 
-  // si guest: ocultar formulario completo (opcional)
   document.getElementById("task-form").style.opacity = canWrite ? "1" : "0.5";
 }
 
 // =============================
-// Cargar usuarios dropdown
+// Usuarios dropdown
 // =============================
 async function loadUsers(){
   const select = document.getElementById("asignado");
@@ -86,20 +86,30 @@ async function loadUsers(){
 // =============================
 // Card
 // =============================
-function createTaskCard(t){
+function canCurrentUserMoveTask(task) {
   const r = role();
+  if (r === "admin") return true;
+  if (r === "member") {
+    // ✅ solo si está asignada a su usuario
+    return task.asignado_a === username();
+  }
+  return false; // guest
+}
 
+function createTaskCard(t){
   const taskDiv = document.createElement("div");
   taskDiv.className = "task";
   taskDiv.dataset.id = t.id;
   taskDiv.style.order = String(1000 - t.estimacion);
 
-  // drag solo admin/member
-  const canMove = (r === "admin" || r === "member");
-  taskDiv.draggable = canMove;
+  const movable = canCurrentUserMoveTask(t);
+  taskDiv.draggable = movable;
 
   taskDiv.addEventListener("dragstart", () => {
-    if (!canMove) return;
+    if (!movable) {
+      draggedTaskId = null;
+      return;
+    }
     draggedTaskId = t.id;
   });
 
@@ -118,8 +128,8 @@ function createTaskCard(t){
 
   right.appendChild(est);
 
-  // botones solo admin/member (guest no)
-  const canEditDelete = (r === "admin" || r === "member");
+  // botones editar/eliminar: admin todo, member solo si es su tarea
+  const canEditDelete = (role() === "admin") || (role() === "member" && t.asignado_a === username());
 
   if (canEditDelete) {
     const editBtn = document.createElement("button");
@@ -153,7 +163,7 @@ function createTaskCard(t){
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Error" }));
+        const err = await res.json().catch(() => ({ error: "No autorizado" }));
         return alert(err.error || "No autorizado");
       }
       loadBoard();
@@ -173,7 +183,10 @@ function createTaskCard(t){
     delBtn.addEventListener("click", async () => {
       if (!confirm("¿Eliminar esta tarea?")) return;
       const res = await fetch(`${API}/tasks/${t.id}`, { method: "DELETE", headers: { ...authHeaders() } });
-      if (!res.ok) return alert("No autorizado");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "No autorizado" }));
+        return alert(err.error || "No autorizado");
+      }
       loadBoard();
     });
 
@@ -249,7 +262,6 @@ document.querySelectorAll(".column").forEach(col => {
 
     const target = col.dataset.status;
 
-    // WIP bloqueo (admin/member pueden mover tareas, pero wip lo define admin)
     if (target === "IN_PROGRESS") {
       const allowed = wipAllowed(getWip());
       if (counts.IN_PROGRESS >= allowed) {
@@ -302,10 +314,9 @@ document.getElementById("task-form").addEventListener("submit", async (e) => {
   loadBoard();
 });
 
-// WIP select: SOLO admin
+// WIP select: solo admin
 document.getElementById("wip-IN_PROGRESS").addEventListener("change", (e) => {
   if (role() !== "admin") {
-    // rollback visual
     e.target.value = String(getWip());
     return alert("Solo el administrador puede cambiar el WIP");
   }
@@ -348,32 +359,27 @@ function initAfterLogin(){
 
   showApp();
   document.getElementById("welcome").textContent = `Hola, ${s.nombre}`;
+  document.getElementById("roleBadge").textContent = role().toUpperCase();
 
-  // set wip UI
-  const wipSel = document.getElementById("wip-IN_PROGRESS");
-  wipSel.value = String(getWip());
+  document.getElementById("wip-IN_PROGRESS").value = String(getWip());
 
   applyRolePermissions();
   loadUsers();
   loadBoard();
 }
 
-// logout
 document.getElementById("logout-btn").addEventListener("click", () => {
   clearSession();
   showLogin();
 });
 
-// login form submit
 document.getElementById("login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   await doLogin();
 });
 
-// guest btn
 document.getElementById("guest-btn").addEventListener("click", doGuest);
 
-// init
 window.addEventListener("DOMContentLoaded", () => {
   const s = getSession();
   if (s) initAfterLogin();
